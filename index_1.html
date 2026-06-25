@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Skyproz Services | Rope Access & Industrial Solutions</title>
+<meta name="description" content="Professional rope access, industrial maintenance, wind turbine support, marine & offshore, manpower supply, and technical consultancy across India.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:'Inter',sans-serif;background:#07101e;color:#f0f4f8;overflow-x:hidden}
+
+/* ── Ambient background ── */
+.sp-bg{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+.sp-bg::before{content:'';position:absolute;width:600px;height:600px;background:radial-gradient(circle,rgba(249,115,22,0.07) 0%,transparent 70%);top:-150px;right:-150px;border-radius:50%}
+.sp-bg::after{content:'';position:absolute;width:500px;height:500px;background:radial-gradient(circle,rgba(59,130,246,0.05) 0%,transparent 70%);bottom:100px;left:-150px;border-radius:50%}
+.sp-content{position:relative;z-index:1}
+
+/* ── Nav ── */
+.sp-nav{display:flex;align-items:center;justify-content:space-between;padding:1.25rem 2.5rem;border-bottom:1px solid rgba(255,255,255,0.06);position:sticky;top:0;z-index:100;background:rgba(7,16,30,0.92);backdrop-filter:blur(12px)}
+.sp-logo{font-size:0.9rem;font-weight:700;letter-spacing:0.1em;color:#fff;text-decoration:none}
+.sp-logo span{color:#f97316}
+.sp-nav-links{display:flex;gap:2rem}
+.sp-nav-links a{font-size:0.8125rem;color:rgba(255,255,255,0.5);text-decoration:none;letter-spacing:0.02em;transition:color 0.2s}
+.sp-nav-links a:hover{color:#fff}
+.sp-nav-cta{background:#f97316;color:#fff;border:none;padding:0.55rem 1.25rem;border-radius:6px;font-size:0.8125rem;font-weight:600;cursor:pointer;text-decoration:none;transition:background 0.2s}
+.sp-nav-cta:hover{background:#ea6c0a}
+
+/* ── Hero ── */
+.sp-hero{padding:5rem 2.5rem 4rem;display:grid;grid-template-columns:1fr 1fr;gap:4rem;align-items:center;max-width:1200px;margin:0 auto}
+.sp-eyebrow{font-size:0.7rem;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;color:#f97316;margin-bottom:1.25rem}
+.sp-hero h1{font-size:3rem;font-weight:700;line-height:1.1;color:#fff;margin-bottom:1.25rem}
+.sp-hero h1 em{font-style:normal;color:#f97316}
+.sp-hero-desc{font-size:0.9375rem;color:rgba(255,255,255,0.45);line-height:1.75;max-width:40ch;margin-bottom:2rem}
+.sp-hero-btns{display:flex;gap:0.75rem;flex-wrap:wrap;margin-bottom:1.5rem}
+.sp-btn-primary{background:#f97316;color:#fff;border:none;padding:0.75rem 1.5rem;border-radius:8px;font-size:0.875rem;font-weight:600;cursor:pointer;text-decoration:none;display:inline-block;transition:background 0.2s,transform 0.1s}
+.sp-btn-primary:hover{background:#ea6c0a;transform:translateY(-1px)}
+.sp-btn-outline{background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.2);padding:0.75rem 1.5rem;border-radius:8px;font-size:0.875rem;font-weight:500;cursor:pointer;text-decoration:none;display:inline-block;transition:border-color 0.2s,transform 0.1s}
+.sp-btn-outline:hover{border-color:rgba(255,255,255,0.5);transform:translateY(-1px)}
+.sp-badges{display:flex;gap:0.6rem;flex-wrap:wrap}
+.sp-badge{font-size:0.7rem;font-weight:500;color:rgba(255,255,255,0.5);border:1px solid rgba(255,255,255,0.1);padding:0.3rem 0.75rem;border-radius:20px;letter-spacing:0.04em}
+
+/* ── 3D card stage ── */
+.sp-card-stage-wrap{perspective:1400px}
+.sp-card-stage{position:relative;height:360px;transform-style:preserve-3d;animation:heroFloat 6s ease-in-out infinite}
+@keyframes heroFloat{
+  0%,100%{transform:rotateX(5deg) rotateY(-12deg) translateY(0)}
+  50%{transform:rotateX(3deg) rotateY(-8deg) translateY(-12px)}
+}
+.sp-back-2{position:absolute;inset:0;top:6px;left:40px;right:40px;height:350px;background:#060f1c;border:1px solid rgba(255,255,255,0.03);border-radius:16px;transform:translateZ(-52px);opacity:0.5}
+.sp-back-1{position:absolute;inset:0;top:4px;left:24px;right:24px;height:355px;background:#0a1828;border:1px solid rgba(255,255,255,0.05);border-radius:16px;transform:translateZ(-26px);opacity:0.75}
+.sp-main-card{position:absolute;inset:0;background:linear-gradient(145deg,#13243f,#0d1b30);border:1px solid rgba(249,115,22,0.25);border-radius:16px;padding:1.5rem;transform:translateZ(0);box-shadow:0 50px 100px rgba(0,0,0,0.7),0 0 0 1px rgba(255,255,255,0.04),inset 0 1px 0 rgba(255,255,255,0.06)}
+.sp-card-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.1rem}
+.sp-card-tag{font-size:0.65rem;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#f97316;background:rgba(249,115,22,0.1);padding:0.3rem 0.65rem;border-radius:5px}
+.sp-card-dot{width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 8px rgba(34,197,94,0.8)}
+.sp-card-title{font-size:1rem;font-weight:600;color:#fff;margin-bottom:0.2rem}
+.sp-card-sub{font-size:0.75rem;color:rgba(255,255,255,0.35);margin-bottom:1.25rem}
+.sp-card-rows{display:flex;flex-direction:column;gap:0.55rem}
+.sp-card-row{display:flex;align-items:center;gap:0.65rem;padding:0.65rem 0.75rem;background:rgba(255,255,255,0.04);border-radius:8px;border:1px solid rgba(255,255,255,0.05)}
+.sp-card-icon{width:30px;height:30px;border-radius:7px;background:rgba(249,115,22,0.12);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.sp-card-label{font-size:0.775rem;color:rgba(255,255,255,0.6);flex:1}
+.sp-card-status{font-size:0.7rem;font-weight:600;color:#22c55e}
+
+/* ── Section base ── */
+.sp-section{padding:5rem 2.5rem;max-width:1200px;margin:0 auto}
+.sp-section-label{font-size:0.7rem;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;color:#f97316;margin-bottom:0.6rem}
+.sp-section-title{font-size:2rem;font-weight:700;color:#fff;margin-bottom:0.5rem;line-height:1.2}
+.sp-section-sub{font-size:0.9rem;color:rgba(255,255,255,0.4);margin-bottom:3rem;max-width:52ch;line-height:1.65}
+
+/* ── Services grid ── */
+.sp-services{display:grid;grid-template-columns:repeat(3,1fr);gap:1.25rem}
+.sp-svc{background:#0d1a30;border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:1.5rem;transform-style:preserve-3d;transition:transform 0.35s cubic-bezier(.23,1,.32,1),border-color 0.35s,box-shadow 0.35s;cursor:default}
+.sp-svc:hover{transform:perspective(600px) rotateX(-5deg) rotateY(5deg) translateY(-6px) translateZ(10px);border-color:rgba(249,115,22,0.35);box-shadow:0 24px 48px rgba(0,0,0,0.5),0 0 0 1px rgba(249,115,22,0.08)}
+.sp-svc-num{font-size:0.65rem;font-weight:700;letter-spacing:0.12em;color:rgba(249,115,22,0.4);margin-bottom:0.9rem}
+.sp-svc-icon{font-size:1.75rem;margin-bottom:0.9rem;display:block}
+.sp-svc-title{font-size:0.9375rem;font-weight:600;color:#fff;margin-bottom:0.5rem}
+.sp-svc-desc{font-size:0.8rem;color:rgba(255,255,255,0.4);line-height:1.65}
+
+/* ── Process steps ── */
+.sp-steps-wrap{padding:5rem 2.5rem;background:linear-gradient(180deg,transparent,rgba(249,115,22,0.03),transparent)}
+.sp-steps{display:grid;grid-template-columns:repeat(4,1fr);gap:1.25rem;max-width:1200px;margin:0 auto}
+.sp-step{background:#0d1a30;border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:1.5rem 1.25rem;text-align:center;transform-style:preserve-3d;transition:transform 0.35s cubic-bezier(.23,1,.32,1);position:relative}
+.sp-step:hover{transform:perspective(500px) rotateX(-6deg) translateY(-6px)}
+.sp-step-connector{position:absolute;top:50%;right:-0.7rem;width:1.4rem;height:1px;background:linear-gradient(90deg,rgba(249,115,22,0.4),transparent)}
+.sp-step:last-child .sp-step-connector{display:none}
+.sp-step-num{width:40px;height:40px;border-radius:50%;border:2px solid rgba(249,115,22,0.4);display:flex;align-items:center;justify-content:center;font-size:0.8rem;font-weight:700;color:#f97316;margin:0 auto 1rem}
+.sp-step-title{font-size:0.9rem;font-weight:600;color:#fff;margin-bottom:0.4rem}
+.sp-step-desc{font-size:0.775rem;color:rgba(255,255,255,0.4);line-height:1.6}
+
+/* ── Why us ── */
+.sp-why{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-top:1rem}
+.sp-why-card{background:rgba(249,115,22,0.04);border:1px solid rgba(249,115,22,0.12);border-radius:12px;padding:1.25rem}
+.sp-why-val{font-size:2rem;font-weight:700;color:#f97316;line-height:1;margin-bottom:0.3rem}
+.sp-why-label{font-size:0.8rem;color:rgba(255,255,255,0.5);line-height:1.5}
+
+/* ── Contact ── */
+.sp-contact-wrap{padding:0 2.5rem 5rem;max-width:1200px;margin:0 auto}
+.sp-contact{background:linear-gradient(135deg,#13243f,#0d1b30);border:1px solid rgba(249,115,22,0.2);border-radius:20px;padding:3.5rem;text-align:center;transform:perspective(900px) rotateX(2deg);box-shadow:0 40px 80px rgba(0,0,0,0.4),inset 0 1px 0 rgba(255,255,255,0.05)}
+.sp-contact h2{font-size:1.75rem;font-weight:700;color:#fff;margin-bottom:0.6rem}
+.sp-contact p{font-size:0.9rem;color:rgba(255,255,255,0.4);margin-bottom:2rem;max-width:42ch;margin-left:auto;margin-right:auto;line-height:1.7}
+.sp-contact-btns{display:flex;gap:0.75rem;justify-content:center;flex-wrap:wrap}
+.sp-contact-info{margin-top:1.5rem;font-size:0.8rem;color:rgba(255,255,255,0.3);display:flex;gap:2rem;justify-content:center;flex-wrap:wrap}
+.sp-contact-info a{color:rgba(255,255,255,0.35);text-decoration:none;transition:color 0.2s}
+.sp-contact-info a:hover{color:#f97316}
+
+/* ── Footer ── */
+.sp-footer{padding:2rem 2.5rem;border-top:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:space-between;flex-wrap:gap;max-width:100%}
+.sp-footer-logo{font-size:0.875rem;font-weight:700;letter-spacing:0.1em;color:#fff;text-decoration:none}
+.sp-footer-logo span{color:#f97316}
+.sp-footer p{font-size:0.75rem;color:rgba(255,255,255,0.2)}
+
+/* ── Divider ── */
+.sp-divider{height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent);margin:0 2.5rem}
+
+/* ── Responsive ── */
+@media(max-width:900px){
+  .sp-hero{grid-template-columns:1fr;gap:3rem;padding:3rem 1.5rem}
+  .sp-services{grid-template-columns:1fr 1fr}
+  .sp-steps{grid-template-columns:1fr 1fr}
+  .sp-step-connector{display:none}
+  .sp-why{grid-template-columns:1fr 1fr}
+  .sp-nav-links{display:none}
+}
+@media(max-width:580px){
+  .sp-hero h1{font-size:2.1rem}
+  .sp-services{grid-template-columns:1fr}
+  .sp-steps{grid-template-columns:1fr 1fr}
+  .sp-why{grid-template-columns:1fr}
+  .sp-section{padding:3rem 1.5rem}
+  .sp-steps-wrap{padding:3rem 1.5rem}
+  .sp-contact-wrap{padding:0 1.5rem 3rem}
+  .sp-contact{padding:2.5rem 1.5rem}
+  .sp-footer{flex-direction:column;gap:0.75rem;text-align:center;padding:1.5rem}
+}
+
+/* ── Reduced motion ── */
+@media(prefers-reduced-motion:reduce){
+  .sp-card-stage{animation:none;transform:rotateX(4deg) rotateY(-8deg)}
+  .sp-svc,.sp-step{transition:none}
+}
+</style>
+</head>
+<body>
+
+<div class="sp-bg"></div>
+<div class="sp-content">
+
+  <!-- NAV -->
+  <nav class="sp-nav">
+    <a href="#" class="sp-logo">S <span>SKYPROZ</span> SERVICES</a>
+    <div class="sp-nav-links">
+      <a href="#services">Services</a>
+      <a href="#process">Safety</a>
+      <a href="#why">Why us</a>
+      <a href="#contact">Contact</a>
+    </div>
+    <a href="https://wa.me/919400327705" class="sp-nav-cta">Get a Quote</a>
+  </nav>
+
+  <!-- HERO -->
+  <section class="sp-hero" id="hero">
+    <div class="sp-hero-text">
+      <p class="sp-eyebrow">Safe access. Reliable execution.</p>
+      <h1>Reaching New<br><em>Heights Safely.</em></h1>
+      <p class="sp-hero-desc">Professional rope access, industrial maintenance, wind turbine support, marine & offshore services, manpower supply, and technical consultancy across India.</p>
+      <div class="sp-hero-btns">
+        <a href="https://wa.me/919400327705" class="sp-btn-primary">Get a Free Quote</a>
+        <a href="tel:+919400327705" class="sp-btn-outline">Call +91 94003 27705</a>
+      </div>
+      <div class="sp-badges">
+        <span class="sp-badge">Safety First</span>
+        <span class="sp-badge">Experienced Team</span>
+        <span class="sp-badge">Pan-India Service</span>
+        <span class="sp-badge">IRATA Trained</span>
+      </div>
+    </div>
+
+    <div class="sp-card-stage-wrap">
+      <div class="sp-card-stage">
+        <div class="sp-back-2"></div>
+        <div class="sp-back-1"></div>
+        <div class="sp-main-card">
+          <div class="sp-card-top">
+            <span class="sp-card-tag">Active Operations</span>
+            <span class="sp-card-dot"></span>
+          </div>
+          <div class="sp-card-title">Skyproz Services</div>
+          <div class="sp-card-sub">Kodungallur, Kerala &nbsp;·&nbsp; Pan-India</div>
+          <div class="sp-card-rows">
+            <div class="sp-card-row">
+              <div class="sp-card-icon">🧗</div>
+              <span class="sp-card-label">Rope Access</span>
+              <span class="sp-card-status">Active</span>
+            </div>
+            <div class="sp-card-row">
+              <div class="sp-card-icon">⚙️</div>
+              <span class="sp-card-label">Industrial Maintenance</span>
+              <span class="sp-card-status">Active</span>
+            </div>
+            <div class="sp-card-row">
+              <div class="sp-card-icon">💨</div>
+              <span class="sp-card-label">Wind Turbine Support</span>
+              <span class="sp-card-status">Active</span>
+            </div>
+            <div class="sp-card-row">
+              <div class="sp-card-icon">⚓</div>
+              <span class="sp-card-label">Marine & Offshore</span>
+              <span class="sp-card-status">Active</span>
+            </div>
+            <div class="sp-card-row">
+              <div class="sp-card-icon">👷</div>
+              <span class="sp-card-label">Manpower Supply</span>
+              <span class="sp-card-status">Active</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="sp-divider"></div>
+
+  <!-- SERVICES -->
+  <section class="sp-section" id="services">
+    <p class="sp-section-label">Our capabilities</p>
+    <h2 class="sp-section-title">Specialist Services for<br>Demanding Environments</h2>
+    <p class="sp-section-sub">Every job is delivered by trained, safety-conscious teams — from a single technician to a full site crew.</p>
+    <div class="sp-services">
+      <div class="sp-svc">
+        <div class="sp-svc-num">01</div>
+        <span class="sp-svc-icon">🧗</span>
+        <div class="sp-svc-title">Rope Access Services</div>
+        <div class="sp-svc-desc">Safe, efficient access for inspections, cleaning, surface preparation, coatings, and repairs at height — without the cost of scaffolding.</div>
+      </div>
+      <div class="sp-svc">
+        <div class="sp-svc-num">02</div>
+        <span class="sp-svc-icon">🔧</span>
+        <div class="sp-svc-title">Industrial Maintenance</div>
+        <div class="sp-svc-desc">Dependable support for plant assets, steel structures, shutdown maintenance, and heavy equipment installation and repair.</div>
+      </div>
+      <div class="sp-svc">
+        <div class="sp-svc-num">03</div>
+        <span class="sp-svc-icon">💨</span>
+        <div class="sp-svc-title">Wind Turbine Support</div>
+        <div class="sp-svc-desc">Specialist access and maintenance for wind turbine blades, nacelles, and towers — keeping renewable energy assets clean, inspected, and productive.</div>
+      </div>
+      <div class="sp-svc">
+        <div class="sp-svc-num">04</div>
+        <span class="sp-svc-icon">⚓</span>
+        <div class="sp-svc-title">Marine & Offshore</div>
+        <div class="sp-svc-desc">Inspection and maintenance for ships, storage tanks, hulls, jetties, and offshore structures across Indian ports and terminals.</div>
+      </div>
+      <div class="sp-svc">
+        <div class="sp-svc-num">05</div>
+        <span class="sp-svc-icon">👷</span>
+        <div class="sp-svc-title">Manpower Supply</div>
+        <div class="sp-svc-desc">Skilled technicians, supervisors, and safety-focused teams — available on short notice and matched precisely to your project scope.</div>
+      </div>
+      <div class="sp-svc">
+        <div class="sp-svc-num">06</div>
+        <span class="sp-svc-icon">📋</span>
+        <div class="sp-svc-title">Technical Consultancy</div>
+        <div class="sp-svc-desc">Practical guidance for access planning, maintenance strategy, risk assessment, and safe systems of work for complex industrial projects.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PROCESS -->
+  <div class="sp-steps-wrap" id="process">
+    <div style="max-width:1200px;margin:0 auto;padding-bottom:2.5rem">
+      <p class="sp-section-label">How we work</p>
+      <h2 class="sp-section-title">Every Job Begins with a Safer Plan</h2>
+    </div>
+    <div class="sp-steps">
+      <div class="sp-step">
+        <div class="sp-step-connector"></div>
+        <div class="sp-step-num">01</div>
+        <div class="sp-step-title">Assess</div>
+        <div class="sp-step-desc">Understand the site, scope, risks, and operational requirements before any work begins.</div>
+      </div>
+      <div class="sp-step">
+        <div class="sp-step-connector"></div>
+        <div class="sp-step-num">02</div>
+        <div class="sp-step-title">Plan</div>
+        <div class="sp-step-desc">Prepare the access method, team, equipment, and safety controls in a documented work plan.</div>
+      </div>
+      <div class="sp-step">
+        <div class="sp-step-connector"></div>
+        <div class="sp-step-num">03</div>
+        <div class="sp-step-title">Execute</div>
+        <div class="sp-step-desc">Complete the work efficiently with disciplined supervision and real-time safety checks.</div>
+      </div>
+      <div class="sp-step">
+        <div class="sp-step-connector"></div>
+        <div class="sp-step-num">04</div>
+        <div class="sp-step-title">Verify</div>
+        <div class="sp-step-desc">Inspect the outcome and hand over clear completion records and photographic evidence.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sp-divider"></div>
+
+  <!-- WHY US -->
+  <section class="sp-section" id="why">
+    <p class="sp-section-label">Why Skyproz</p>
+    <h2 class="sp-section-title">Built for High-Stakes Work</h2>
+    <p class="sp-section-sub">We take on jobs where precision and safety are non-negotiable — and we deliver them on time.</p>
+    <div class="sp-why">
+      <div class="sp-why-card">
+        <div class="sp-why-val">100%</div>
+        <div class="sp-why-label">Safety record across all completed projects — no lost-time incidents.</div>
+      </div>
+      <div class="sp-why-card">
+        <div class="sp-why-val">Pan-India</div>
+        <div class="sp-why-label">Available for mobilisation across all major states — Kerala, Tamil Nadu, Gujarat, Maharashtra, and beyond.</div>
+      </div>
+      <div class="sp-why-card">
+        <div class="sp-why-val">24 hrs</div>
+        <div class="sp-why-label">Typical mobilisation window for emergency maintenance and shutdown support.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONTACT -->
+  <div class="sp-contact-wrap" id="contact">
+    <div class="sp-contact">
+      <h2>Have a Challenging Project?</h2>
+      <p>Tell us what you need. Our team will help you find a safe, practical, and cost-effective way forward.</p>
+      <div class="sp-contact-btns">
+        <a href="https://wa.me/919400327705" class="sp-btn-primary">Message on WhatsApp</a>
+        <a href="mailto:info@skyproz.in" class="sp-btn-outline">Email Project Details</a>
+      </div>
+      <div class="sp-contact-info">
+        <a href="tel:+919400327705">+91 94003 27705</a>
+        <a href="mailto:info@skyproz.in">info@skyproz.in</a>
+        <span>Kodungallur, Kerala</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="sp-footer">
+    <a href="#" class="sp-footer-logo">S <span>SKYPROZ</span> SERVICES</a>
+    <p>© 2026 Skyproz Services. All rights reserved.</p>
+  </footer>
+
+</div>
+</body>
+</html>
