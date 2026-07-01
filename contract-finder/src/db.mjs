@@ -1,10 +1,35 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { config, rootDir } from './config.mjs';
 
-fs.mkdirSync(path.dirname(config.databasePath), { recursive: true });
-export const db = new DatabaseSync(config.databasePath);
+function ensureWritableDatabasePath(databasePath) {
+  const directory = path.dirname(databasePath);
+  fs.mkdirSync(directory, { recursive: true });
+  const probe = path.join(directory, `.skyproz-write-test-${process.pid}-${Date.now()}`);
+  fs.writeFileSync(probe, '');
+  fs.rmSync(probe, { force: true });
+  return databasePath;
+}
+
+function temporaryDatabasePath(preferredPath) {
+  const filename = path.basename(preferredPath || 'contract-finder.db') || 'contract-finder.db';
+  return path.join(os.tmpdir(), 'skyproz-contract-finder', filename);
+}
+
+export let databaseIsTemporary = false;
+export let activeDatabasePath = config.databasePath;
+
+try {
+  activeDatabasePath = ensureWritableDatabasePath(config.databasePath);
+} catch (error) {
+  activeDatabasePath = ensureWritableDatabasePath(temporaryDatabasePath(config.databasePath));
+  databaseIsTemporary = true;
+  console.warn(`[Skyproz] DATABASE_PATH "${config.databasePath}" is not writable (${error.code || error.message}). Falling back to temporary SQLite database "${activeDatabasePath}". Data will not persist between restarts or redeploys.`);
+}
+
+export const db = new DatabaseSync(activeDatabasePath);
 db.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;');
 
 export function migrate() {
