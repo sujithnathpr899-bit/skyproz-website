@@ -1,0 +1,16 @@
+{
+  "name": "Skyproz Services",
+  "short_name": "Skyproz",
+  "description": "Global industrial access solutions by Skyproz Services.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#07101e",
+  "theme_color": "#07101e",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

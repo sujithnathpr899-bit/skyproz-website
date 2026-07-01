@@ -1,0 +1,25 @@
+SKYPROZ WEBSITE PUBLISHING CHECKLIST
+
+1. Upload every file in this folder to your web-hosting public folder.
+2. Point the skyproz.in domain to the hosting provider using its DNS instructions.
+3. Enable HTTPS/SSL before announcing the new website.
+4. Test the phone, WhatsApp, email, and map links after publishing.
+5. Add https://skyproz.in/sitemap.xml to Google Search Console.
+
+UPDATING THE LIVE SITE ON RENDER
+Use the root render.yaml file in this project for the recommended Render setup.
+It deploys one Render Web Service that serves the company website at:
+https://skyproz.in/
+and the Contract Finder at:
+https://skyproz.in/contract-finder/
+
+CONTRACT FINDER BACKEND
+The Contract Finder runs inside the same Render Web Service using persistent SQLite storage.
+Attach a persistent disk at /app/data before going live.
+After deployment, verify:
+https://skyproz.in/api/contract-finder/health
+
+Website contact details:
+Phone / WhatsApp: +91 94003 27705
+Email: info@skyproz.in
+Address: A.P. Antony Square, 13-41, Chappara Junction, Kodungallur, Kerala 680663

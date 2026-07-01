@@ -1,0 +1,21 @@
+{
+  "name": "skyproz-platform",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "node -e \"console.log('Skyproz platform build: no compile step required.')\"",
+    "start": "node contract-finder/scripts/migrate.mjs && node contract-finder/src/server.mjs",
+    "migrate": "node contract-finder/scripts/migrate.mjs",
+    "seed": "node contract-finder/scripts/seed.mjs",
+    "jobs": "node contract-finder/scripts/run-jobs.mjs",
+    "jobs:hourly": "node contract-finder/scripts/run-jobs.mjs hourly",
+    "jobs:daily": "node contract-finder/scripts/run-jobs.mjs daily",
+    "jobs:weekly": "node contract-finder/scripts/run-jobs.mjs weekly",
+    "jobs:monthly": "node contract-finder/scripts/run-jobs.mjs monthly",
+    "test": "node --test --test-isolation=none contract-finder/tests/*.test.mjs"
+  }
+}

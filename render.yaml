@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: skyproz-services
+    runtime: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/contract-finder/health
+    disk:
+      name: skyproz-contract-finder-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: DATABASE_PATH
+        value: /var/data/contract-finder.db
+      - key: COMPANY_SITE_DIR
+        value: ./outputs
+      - key: APP_ORIGIN
+        value: https://skyproz.in
+      - key: COOKIE_SECURE
+        value: true
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: CRON_SECRET
+        generateValue: true
+      - key: BOT_SCHEDULER_ENABLED
+        value: true
+      - key: BOT_SCHEDULER_INTERVAL_MINUTES
+        value: 60
+      - key: BOT_IMPORT_CONCURRENCY
+        value: 4
+      - key: BOT_RETRY_ATTEMPTS
+        value: 2
+      - key: BOT_HIGH_SCORE_THRESHOLD
+        value: 75
+      - key: BOT_HIGH_VALUE_BUDGET
+        value: 100000

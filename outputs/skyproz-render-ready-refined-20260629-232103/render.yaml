@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: skyproz-services
+    runtime: docker
+    dockerfilePath: ./Dockerfile.render
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /api/contract-finder/health
+    disk:
+      name: skyproz-contract-finder-data
+      mountPath: /app/data
+      sizeGB: 1
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: 8787
+      - key: DATABASE_PATH
+        value: /app/data/contract-finder.db
+      - key: COMPANY_SITE_DIR
+        value: /app/site
+      - key: APP_ORIGIN
+        value: https://skyproz.in
+      - key: COOKIE_SECURE
+        value: true
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: CRON_SECRET
+        generateValue: true

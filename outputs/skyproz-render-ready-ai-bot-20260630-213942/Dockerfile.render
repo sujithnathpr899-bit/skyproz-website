@@ -1,0 +1,24 @@
+FROM node:24-alpine
+
+WORKDIR /app/contract-finder
+
+COPY contract-finder/ /app/contract-finder/
+COPY outputs/index.html /app/site/index.html
+COPY outputs/styles.css /app/site/styles.css
+COPY outputs/script.js /app/site/script.js
+COPY outputs/skyproz-og.jpg /app/site/skyproz-og.jpg
+COPY outputs/favicon.svg /app/site/favicon.svg
+COPY outputs/site.webmanifest /app/site/site.webmanifest
+COPY outputs/robots.txt /app/site/robots.txt
+COPY outputs/sitemap.xml /app/site/sitemap.xml
+
+RUN mkdir -p /app/data
+
+ENV HOST=0.0.0.0 \
+    PORT=8787 \
+    DATABASE_PATH=/app/data/contract-finder.db \
+    COMPANY_SITE_DIR=/app/site
+
+EXPOSE 8787
+
+CMD ["sh", "-c", "node scripts/migrate.mjs && node src/server.mjs"]

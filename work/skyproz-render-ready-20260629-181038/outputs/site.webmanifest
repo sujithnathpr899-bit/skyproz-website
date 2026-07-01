@@ -1,0 +1,16 @@
+{
+  "name": "Skyproz Services",
+  "short_name": "Skyproz",
+  "description": "Rope access and industrial solutions across India.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#07101e",
+  "theme_color": "#07101e",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

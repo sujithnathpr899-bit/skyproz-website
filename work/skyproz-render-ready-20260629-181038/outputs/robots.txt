@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://skyproz.in/sitemap.xml
+Sitemap: https://skyproz.in/contract-finder/sitemap.xml
