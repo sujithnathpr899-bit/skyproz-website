@@ -3,6 +3,7 @@ import { upsertImportedContract } from '../contracts.mjs';
 
 const USER_AGENT = 'SkyprozContractFinder/2.0 (+https://skyproz.in)';
 const responseCache = new Map();
+const env = globalThis.process?.env || {};
 
 export function getPath(value, path) {
   return String(path || '').split('.').filter(Boolean).reduce((current, key) => current?.[key], value);
@@ -94,6 +95,39 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 20000) {
   }
 }
 
+function sourceConfig(source) {
+  return {
+    parser: parseJson(source.parser_config_json, {}),
+    headers: parseJson(source.headers_json, {}),
+    auth: parseJson(source.auth_config_json, {}),
+    pagination: parseJson(source.pagination_config_json, {})
+  };
+}
+
+function sourceUrl(source, definition) {
+  const url = source.api_url || definition.apiUrl || source.source_url || definition.sourceUrl;
+  if (!url) return '';
+  const apiKeyEnv = source.api_key_env || parseJson(source.auth_config_json, {}).api_key_env;
+  const apiKey = apiKeyEnv ? env[apiKeyEnv] : '';
+  return String(url).replaceAll('{api_key}', encodeURIComponent(apiKey || ''));
+}
+
+function requestOptions(source, parserType) {
+  const { parser, headers, auth } = sourceConfig(source);
+  const requestHeaders = {
+    accept: parserType === 'json' ? 'application/json' : '*/*',
+    'user-agent': USER_AGENT,
+    ...headers,
+    ...(parser.headers || {})
+  };
+  const bearerEnv = auth.bearer_token_env || parser.bearer_token_env;
+  if (bearerEnv && env[bearerEnv]) requestHeaders.authorization = `Bearer ${env[bearerEnv]}`;
+  const apiKeyEnv = source.api_key_env || auth.api_key_env || parser.api_key_env;
+  const apiKeyHeader = auth.api_key_header || parser.api_key_header;
+  if (apiKeyEnv && apiKeyHeader && env[apiKeyEnv]) requestHeaders[apiKeyHeader] = env[apiKeyEnv];
+  return { method: 'GET', headers: requestHeaders };
+}
+
 async function parseResponse(response, parserType) {
   const type = String(parserType || '').toLowerCase();
   if (type === 'csv') return parseCsv(await response.text());
@@ -109,19 +143,42 @@ export function createConnector(definition) {
     documentation: definition.documentation || '',
 
     async testConnection(source = {}) {
-      const url = source.api_url || definition.apiUrl || source.source_url || definition.sourceUrl;
+      const url = sourceUrl(source, definition);
       if (!url) return { ok: false, status: 'missing_url', message: 'Connector requires source_url or api_url.' };
       const started = Date.now();
       try {
-        const response = await fetchWithTimeout(url, { method: 'GET', headers: { accept: '*/*', 'user-agent': USER_AGENT } }, 15000);
-        return { ok: response.ok, status: response.status, duration_ms: Date.now() - started, url };
+        const items = await connector.fetchContracts(source);
+        const sample_contracts = items.slice(0, 5).map((item) => {
+          const normalized = connector.normalize(item, source);
+          const validation = connector.validate(normalized);
+          return {
+            title: normalized.title || '',
+            source_url: normalized.source_url || '',
+            country: normalized.country || '',
+            industry: normalized.industry || '',
+            deadline: normalized.deadline || null,
+            valid: validation.ok,
+            warnings: validation.warnings,
+            errors: validation.errors
+          };
+        });
+        const validSamples = sample_contracts.filter((item) => item.valid).length;
+        return {
+          ok: items.length === 0 || validSamples > 0,
+          status: validSamples > 0 ? 'ok' : items.length === 0 ? 'empty' : 'parser_failed',
+          duration_ms: Date.now() - started,
+          url,
+          sample_count: items.length,
+          sample_contracts,
+          message: items.length === 0 ? 'Connection succeeded but no items were returned.' : `${validSamples} sample contract(s) validated.`
+        };
       } catch (error) {
         return { ok: false, status: 'failed', duration_ms: Date.now() - started, error: error.message, url };
       }
     },
 
     async fetchContracts(source = {}) {
-      const url = source.api_url || definition.apiUrl || source.source_url || definition.sourceUrl;
+      const url = sourceUrl(source, definition);
       if (!url) return [];
       const config = parseJson(source.parser_config_json, {});
       const parserType = config.parser_type || definition.parserType || source.parser_type || 'json';
@@ -131,13 +188,14 @@ export function createConnector(definition) {
       if (cacheTtlMs > 0 && cached && cached.expiresAt > Date.now()) return cached.items;
       const rateLimitMs = Number(config.rate_limit_ms || source.rate_limit_ms || 0);
       if (rateLimitMs > 0) await new Promise((resolve) => setTimeout(resolve, rateLimitMs));
-      const response = await fetchWithTimeout(url, { headers: { accept: parserType === 'json' ? 'application/json' : '*/*', 'user-agent': USER_AGENT } });
+      const response = await fetchWithTimeout(url, requestOptions(source, parserType));
       if (!response.ok) throw new Error(`${connector.name} returned HTTP ${response.status}`);
       const payload = await parseResponse(response, parserType);
       const items = getPath(payload, config.items_path || definition.itemsPath) || payload;
       if (!Array.isArray(items)) throw new Error('Connector payload did not resolve to an array.');
-      if (cacheTtlMs > 0) responseCache.set(key, { items, expiresAt: Date.now() + cacheTtlMs });
-      return items;
+      const limited = Number(config.limit || 0) > 0 ? items.slice(0, Number(config.limit)) : items;
+      if (cacheTtlMs > 0) responseCache.set(key, { items: limited, expiresAt: Date.now() + cacheTtlMs });
+      return limited;
     },
 
     normalize(item, source = {}) {

@@ -82,6 +82,14 @@ export const server = createServer(async (request, response) => {
       ['/contract-finder/dashboard', 'dashboard'], ['/contract-finder/favorites', 'favorites'],
       ['/contract-finder/saved-searches', 'saved'], ['/contract-finder/alerts', 'alerts'],
       ['/contract-finder/watchlists', 'watchlists'], ['/contract-finder/admin', 'admin'],
+      ['/contract-finder/admin/connectors', 'connectors'],
+      ['/contract-finder/admin/source-discovery', 'sourceDiscovery'],
+      ['/contract-finder/admin/connector-wizard', 'connectorWizard'],
+      ['/contract-finder/admin/marketplace', 'marketplace'],
+      ['/admin/connectors', 'connectors'],
+      ['/admin/source-discovery', 'sourceDiscovery'],
+      ['/admin/connector-wizard', 'connectorWizard'],
+      ['/admin/marketplace', 'marketplace'],
       ['/contract-finder/login', 'login']
     ]);
     const page = pages.get(url.pathname);

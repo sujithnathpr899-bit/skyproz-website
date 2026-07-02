@@ -3,8 +3,10 @@ import { config } from './config.mjs';
 import { createSession, currentUser, destroySession, hashPassword, requireAdmin, requirePremium, requireUser, sessionCookie, clearSessionCookie, verifyPassword } from './auth.mjs';
 import { createContract, getContract, listFilterOptions, removeDuplicateContracts, searchContracts, updateContract } from './contracts.mjs';
 import { runAiTask } from './services/ai.mjs';
-import { availableConnectors, connectorStatus, importSource, testSourceConnection } from './services/importer.mjs';
+import { availableConnectors, connectorLogs, connectorStatus, importSource, testSourceConnection } from './services/importer.mjs';
 import { botStatus, createKeyword, deleteKeyword, listKeywords, runProcurementBot, updateKeyword } from './services/procurement-bot.mjs';
+import { importAnalytics, marketplaceSnapshot, runSourceDiscovery } from './services/source-discovery.mjs';
+import { connectorWizardSnapshot, detectWizardSource, saveWizardConfiguration, testWizardConfiguration } from './services/connector-wizard.mjs';
 import { generateAnalyticsSnapshot, runSchedulerJob, schedulerHealth } from './jobs.mjs';
 import { readJson, sendJson } from './utils.mjs';
 
@@ -238,6 +240,85 @@ export async function handleApi(request, response, url) {
       if (request.method === 'GET' && pathname === '/api/contract-finder/admin/connectors') {
         sendJson(response, 200, connectorStatus()); return true;
       }
+      if (request.method === 'GET' && pathname === '/api/contract-finder/admin/source-discovery') {
+        sendJson(response, 200, { ...runSourceDiscovery(), analytics: importAnalytics() }); return true;
+      }
+      if (request.method === 'GET' && pathname === '/api/contract-finder/admin/connector-wizard') {
+        sendJson(response, 200, connectorWizardSnapshot()); return true;
+      }
+      if (request.method === 'POST' && pathname === '/api/contract-finder/admin/connector-wizard/detect') {
+        const body = await readJson(request);
+        const result = detectWizardSource(body);
+        auditLog(adminUser, request, 'connector_wizard.detect', result.source_id ? 'contract_sources' : 'connector_templates', result.source_id || result.template_id, { name: result.name });
+        sendJson(response, 200, result); return true;
+      }
+      if (request.method === 'POST' && pathname === '/api/contract-finder/admin/connector-wizard/test') {
+        const body = await readJson(request);
+        const result = await testWizardConfiguration(body);
+        auditLog(adminUser, request, 'connector_wizard.test', body.source_id ? 'contract_sources' : 'connector_templates', body.source_id || body.template_id || null, { name: result.source.name, ok: result.test.ok, http_code: result.diagnostics.http_code });
+        sendJson(response, 200, result); return true;
+      }
+      if (request.method === 'POST' && pathname === '/api/contract-finder/admin/connector-wizard/save') {
+        const body = await readJson(request);
+        const result = await saveWizardConfiguration(body);
+        auditLog(adminUser, request, 'connector_wizard.save', 'contract_sources', result.id, { working: result.working, imported: result.import?.imported || 0, updated: result.import?.updated || 0 });
+        sendJson(response, 200, result); return true;
+      }
+      if (request.method === 'POST' && pathname === '/api/contract-finder/admin/source-discovery/run') {
+        const result = runSourceDiscovery();
+        auditLog(adminUser, request, 'source_discovery.run', 'source_discovery_results', null, result.summary);
+        sendJson(response, 200, { ...result, analytics: importAnalytics() }); return true;
+      }
+      if (request.method === 'POST' && pathname === '/api/contract-finder/admin/source-discovery/verify') {
+        const body = await readJson(request);
+        if (!body.source_id) throw Object.assign(new Error('A configured source_id is required before verification.'), { status: 400 });
+        const source = db.prepare('SELECT * FROM contract_sources WHERE id = ?').get(body.source_id);
+        if (!source) throw Object.assign(new Error('Source not found'), { status: 404 });
+        const testResult = await testSourceConnection(source);
+        const discovery = runSourceDiscovery();
+        auditLog(adminUser, request, 'source_discovery.verify', 'contract_sources', body.source_id, testResult);
+        sendJson(response, 200, { test: testResult, discovery, analytics: importAnalytics() }); return true;
+      }
+      if (request.method === 'POST' && pathname === '/api/contract-finder/admin/source-discovery/save') {
+        const body = await readJson(request); requireFields(body, ['name', 'source_url']);
+        if (!body.api_url && body.enable) throw Object.assign(new Error('Add an official API/feed endpoint before enabling this connector.'), { status: 400 });
+        const result = db.prepare(`INSERT INTO contract_sources(name, source_url, api_url, country, source_type, parser_type, parser_config_json, is_active)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(body.name, body.source_url, body.api_url || null, body.country || 'Worldwide', body.source_type || 'government', body.parser_type || 'json', JSON.stringify(body.parser_config || {}), Number(Boolean(body.enable && body.api_url)));
+        db.prepare(`UPDATE contract_sources SET connector_key = ?, region = ?, schedule = ?, metadata_json = ?,
+          source_format = ?, base_url = ?, api_key_env = ?, headers_json = ?, auth_config_json = ?,
+          pagination_config_json = ?, rate_limit_ms = ?, field_mapping_json = ?,
+          scheduler_status = CASE WHEN is_active = 1 THEN 'scheduled' ELSE 'disabled' END WHERE id = ?`)
+          .run(body.connector_key || body.parser_type || 'json', body.region || null, body.schedule || 'daily', JSON.stringify(body.metadata || {}),
+            body.source_format || body.parser_config?.parser_type || 'json', body.base_url || null, body.api_key_env || null,
+            JSON.stringify(body.headers || {}), JSON.stringify(body.auth_config || {}), JSON.stringify(body.pagination_config || {}),
+            Number(body.rate_limit_ms || 0), JSON.stringify(body.field_mapping || {}), result.lastInsertRowid);
+        const discovery = runSourceDiscovery();
+        auditLog(adminUser, request, 'source_discovery.save', 'contract_sources', result.lastInsertRowid, { name: body.name });
+        sendJson(response, 201, { id: Number(result.lastInsertRowid), discovery }); return true;
+      }
+      if (request.method === 'GET' && pathname === '/api/contract-finder/admin/marketplace') {
+        sendJson(response, 200, { ...marketplaceSnapshot(), analytics: importAnalytics() }); return true;
+      }
+      if (request.method === 'POST' && pathname === '/api/contract-finder/admin/marketplace/install') {
+        const body = await readJson(request); requireFields(body, ['name', 'source_url']);
+        if (!body.api_url) throw Object.assign(new Error('Marketplace install requires a verified official API/feed endpoint. Template-only providers cannot be installed automatically.'), { status: 400 });
+        const result = db.prepare(`INSERT INTO contract_sources(name, source_url, api_url, country, source_type, parser_type, parser_config_json, is_active)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 0)`).run(body.name, body.source_url, body.api_url, body.country || 'Worldwide', body.source_type || 'government', body.parser_type || 'json', JSON.stringify(body.parser_config || {}));
+        db.prepare(`UPDATE contract_sources SET connector_key = ?, region = ?, schedule = ?, metadata_json = ?,
+          source_format = ?, base_url = ?, api_key_env = ?, headers_json = ?, auth_config_json = ?,
+          pagination_config_json = ?, rate_limit_ms = ?, scheduler_status = 'disabled' WHERE id = ?`)
+          .run(body.connector_key || body.parser_type || 'json', body.region || null, body.schedule || 'daily', JSON.stringify(body.metadata || {}),
+            body.source_format || body.parser_config?.parser_type || 'json', body.base_url || null, body.api_key_env || null,
+            JSON.stringify(body.headers || {}), JSON.stringify(body.auth_config || {}), JSON.stringify(body.pagination_config || {}),
+            Number(body.rate_limit_ms || 0), result.lastInsertRowid);
+        runSourceDiscovery();
+        auditLog(adminUser, request, 'marketplace.install', 'contract_sources', result.lastInsertRowid, { name: body.name });
+        sendJson(response, 201, { id: Number(result.lastInsertRowid), installed: true }); return true;
+      }
+      route = match(pathname, /^\/api\/contract-finder\/admin\/sources\/(\d+)\/logs$/);
+      if (request.method === 'GET' && route) {
+        sendJson(response, 200, { items: connectorLogs(route[0], searchParams.get('limit') || 50) }); return true;
+      }
       if (request.method === 'GET' && pathname === '/api/contract-finder/admin/bot/status') {
         sendJson(response, 200, botStatus(adminUser.id)); return true;
       }
@@ -284,8 +365,13 @@ export async function handleApi(request, response, url) {
         const body = await readJson(request); requireFields(body, ['name', 'source_url']);
         const result = db.prepare(`INSERT INTO contract_sources(name, source_url, api_url, country, source_type, parser_type, parser_config_json, is_active)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(body.name, body.source_url, body.api_url || null, body.country || null, body.source_type || 'government', body.parser_type || 'json', JSON.stringify(body.parser_config || {}), Number(body.is_active !== false));
-        db.prepare(`UPDATE contract_sources SET connector_key = ?, region = ?, schedule = ?, metadata_json = ? WHERE id = ?`)
-          .run(body.connector_key || body.parser_type || 'json', body.region || null, body.schedule || 'daily', JSON.stringify(body.metadata || {}), result.lastInsertRowid);
+        db.prepare(`UPDATE contract_sources SET connector_key = ?, region = ?, schedule = ?, metadata_json = ?,
+          source_format = ?, base_url = ?, api_key_env = ?, headers_json = ?, auth_config_json = ?,
+          pagination_config_json = ?, rate_limit_ms = ?, scheduler_status = CASE WHEN is_active = 1 THEN 'scheduled' ELSE 'disabled' END WHERE id = ?`)
+          .run(body.connector_key || body.parser_type || 'json', body.region || null, body.schedule || 'daily', JSON.stringify(body.metadata || {}),
+            body.source_format || body.parser_config?.parser_type || 'json', body.base_url || null, body.api_key_env || null,
+            JSON.stringify(body.headers || {}), JSON.stringify(body.auth_config || {}), JSON.stringify(body.pagination_config || {}),
+            Number(body.rate_limit_ms || 0), result.lastInsertRowid);
         auditLog(adminUser, request, 'source.create', 'contract_sources', result.lastInsertRowid, { name: body.name });
         sendJson(response, 201, { id: Number(result.lastInsertRowid) }); return true;
       }
@@ -295,9 +381,19 @@ export async function handleApi(request, response, url) {
         db.prepare(`UPDATE contract_sources SET name = COALESCE(?, name), source_url = COALESCE(?, source_url), api_url = COALESCE(?, api_url),
           country = COALESCE(?, country), region = COALESCE(?, region), source_type = COALESCE(?, source_type),
           connector_key = COALESCE(?, connector_key), schedule = COALESCE(?, schedule), parser_config_json = COALESCE(?, parser_config_json),
-          is_active = COALESCE(?, is_active), updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+          source_format = COALESCE(?, source_format), base_url = COALESCE(?, base_url), api_key_env = COALESCE(?, api_key_env),
+          headers_json = COALESCE(?, headers_json), auth_config_json = COALESCE(?, auth_config_json),
+          pagination_config_json = COALESCE(?, pagination_config_json), rate_limit_ms = COALESCE(?, rate_limit_ms),
+          is_active = COALESCE(?, is_active),
+          scheduler_status = CASE WHEN COALESCE(?, is_active) = 1 THEN 'scheduled' ELSE 'disabled' END,
+          updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
           .run(body.name ?? null, body.source_url ?? null, body.api_url ?? null, body.country ?? null, body.region ?? null, body.source_type ?? null,
             body.connector_key ?? null, body.schedule ?? null, body.parser_config ? JSON.stringify(body.parser_config) : null,
+            body.source_format ?? null, body.base_url ?? null, body.api_key_env ?? null,
+            body.headers ? JSON.stringify(body.headers) : null, body.auth_config ? JSON.stringify(body.auth_config) : null,
+            body.pagination_config ? JSON.stringify(body.pagination_config) : null,
+            body.rate_limit_ms === undefined ? null : Number(body.rate_limit_ms),
+            body.is_active === undefined ? null : Number(Boolean(body.is_active)),
             body.is_active === undefined ? null : Number(Boolean(body.is_active)), route[0]);
         auditLog(adminUser, request, 'source.update', 'contract_sources', route[0], body);
         sendJson(response, 200, { ok: true }); return true;

@@ -6,10 +6,6 @@ services:
     buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /api/contract-finder/health
-    disk:
-      name: skyproz-contract-finder-data
-      mountPath: /var/data
-      sizeGB: 1
     envVars:
       - key: NODE_ENV
         value: production
