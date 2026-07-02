@@ -109,7 +109,22 @@ function sourceUrl(source, definition) {
   if (!url) return '';
   const apiKeyEnv = source.api_key_env || parseJson(source.auth_config_json, {}).api_key_env;
   const apiKey = apiKeyEnv ? env[apiKeyEnv] : '';
-  return String(url).replaceAll('{api_key}', encodeURIComponent(apiKey || ''));
+  const resolved = String(url).replaceAll('{api_key}', encodeURIComponent(apiKey || ''));
+  const config = parseJson(source.parser_config_json, {}) || {};
+  const pagination = parseJson(source.pagination_config_json, {}) || {};
+  const limit = Number(config.limit || 0);
+  if (!limit) return resolved;
+  try {
+    const parsed = new URL(resolved);
+    const limitParam = pagination.limit_param || pagination.rows_param || ['limit', 'rows', 'pageSize', 'page_size'].find((key) => parsed.searchParams.has(key));
+    if (limitParam) {
+      parsed.searchParams.set(limitParam, String(limit));
+      return parsed.href;
+    }
+  } catch {
+    return resolved;
+  }
+  return resolved;
 }
 
 function requestOptions(source, parserType) {
@@ -214,7 +229,7 @@ export function createConnector(definition) {
     async import(source = {}, options = {}) {
       const started = Date.now();
       const rawItems = await connector.fetchContracts(source);
-      const summary = { imported: 0, updated: 0, skipped: 0, warnings: [], failures: [], contract_ids: [], duration_ms: 0 };
+      const summary = { imported: 0, updated: 0, skipped: 0, duplicate_skipped: 0, warnings: [], failures: [], contract_ids: [], duration_ms: 0 };
       for (const item of rawItems) {
         try {
           const normalized = connector.normalize(item, source);
@@ -223,7 +238,9 @@ export function createConnector(definition) {
           for (const warning of validation.warnings) summary.warnings.push({ title: normalized.title || 'Untitled', warning });
           const result = upsertImportedContract({ ...normalized, import_run_id: options.runId || null });
           if (result.contract?.id) summary.contract_ids.push(result.contract.id);
-          if (result.action === 'created') summary.imported++; else summary.updated++;
+          if (result.action === 'created') summary.imported++;
+          else if (result.action === 'skipped') { summary.skipped++; summary.duplicate_skipped++; }
+          else summary.updated++;
         } catch (error) {
           summary.skipped++; summary.failures.push({ error: error.message });
         }

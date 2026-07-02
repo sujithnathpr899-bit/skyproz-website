@@ -102,6 +102,8 @@ export function buildWizardSource(body = {}) {
       ...parseMaybeJson(body.pagination_config, {})
     }),
     rate_limit_ms: Number(body.rate_limit_ms || existing?.rate_limit_ms || 0),
+    initial_import_limit: Number(body.initial_import_limit || existing?.initial_import_limit || 500),
+    daily_import_limit: Number(body.daily_import_limit || existing?.daily_import_limit || 50),
     is_active: Number(Boolean(body.enable))
   };
 }
@@ -136,6 +138,8 @@ export function connectorWizardSnapshot() {
       base_url: source.base_url,
       api_key_env: source.api_key_env,
       rate_limit_ms: source.rate_limit_ms || 0,
+      initial_import_limit: source.initial_import_limit || 500,
+      daily_import_limit: source.daily_import_limit || 50,
       field_mapping: parseJson(source.parser_config_json, {}).field_map || parseJson(source.field_mapping_json, {}).mapping || {},
       status: discoveryItem?.status || 'requires_configuration',
       documentation_url: metadata.api_documentation_url || null,
@@ -165,6 +169,8 @@ export function connectorWizardSnapshot() {
       base_url: null,
       api_key_env: null,
       rate_limit_ms: 0,
+      initial_import_limit: 500,
+      daily_import_limit: 50,
       field_mapping: {},
       status: 'requires_configuration',
       documentation_url: null,
@@ -288,23 +294,25 @@ function persistSource(source, enable = false) {
     db.prepare(`UPDATE contract_sources SET name = ?, source_url = ?, api_url = ?, country = ?, region = ?,
       source_type = ?, parser_type = ?, parser_config_json = ?, connector_key = ?, schedule = ?, metadata_json = ?,
       source_format = ?, base_url = ?, api_key_env = ?, headers_json = ?, auth_config_json = ?,
-      pagination_config_json = ?, rate_limit_ms = ?, is_active = ?,
+      pagination_config_json = ?, rate_limit_ms = ?, initial_import_limit = ?, daily_import_limit = ?, is_active = ?,
       scheduler_status = CASE WHEN ? = 1 THEN 'scheduled' ELSE 'disabled' END,
       updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
       .run(source.name, source.source_url, source.api_url, source.country, source.region, source.source_type,
         source.parser_type, source.parser_config_json, source.connector_key, source.schedule, source.metadata_json,
         source.source_format, source.base_url, source.api_key_env, source.headers_json, source.auth_config_json,
-        source.pagination_config_json, source.rate_limit_ms, Number(enable), Number(enable), source.id);
+        source.pagination_config_json, source.rate_limit_ms, source.initial_import_limit, source.daily_import_limit, Number(enable), Number(enable), source.id);
     return Number(source.id);
   }
   const result = db.prepare(`INSERT INTO contract_sources(name, source_url, api_url, country, source_type, parser_type,
     parser_config_json, is_active, connector_key, region, schedule, metadata_json, source_format, base_url,
-    api_key_env, headers_json, auth_config_json, pagination_config_json, rate_limit_ms, scheduler_status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    api_key_env, headers_json, auth_config_json, pagination_config_json, rate_limit_ms, initial_import_limit,
+    daily_import_limit, scheduler_status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .run(source.name, source.source_url, source.api_url, source.country, source.source_type, source.parser_type,
       source.parser_config_json, Number(enable), source.connector_key, source.region, source.schedule,
       source.metadata_json, source.source_format, source.base_url, source.api_key_env, source.headers_json,
-      source.auth_config_json, source.pagination_config_json, source.rate_limit_ms, enable ? 'scheduled' : 'disabled');
+      source.auth_config_json, source.pagination_config_json, source.rate_limit_ms, source.initial_import_limit,
+      source.daily_import_limit, enable ? 'scheduled' : 'disabled');
   return Number(result.lastInsertRowid);
 }
 

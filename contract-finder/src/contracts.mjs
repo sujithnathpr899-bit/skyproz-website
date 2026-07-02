@@ -9,6 +9,37 @@ const SORTS = {
   budget_low: 'c.budget_value ASC NULLS LAST'
 };
 
+const SORT_COLUMNS = {
+  score: 'c.opportunity_score',
+  match_score: 'c.opportunity_score',
+  title: 'c.title',
+  country: 'c.country',
+  industry: 'c.industry',
+  source: 'c.source_name',
+  budget: 'c.budget_value',
+  deadline: 'c.deadline',
+  status: 'c.status',
+  posted: 'c.posted_date',
+  posted_date: 'c.posted_date',
+  buyer: 'c.buyer_name',
+  type: 'c.contract_type'
+};
+
+function sortSql(sort) {
+  if (SORTS[sort]) return SORTS[sort];
+  const clauses = String(sort || '').split(',').slice(0, 4).map((part) => {
+    const [rawKey, rawDirection] = part.split(':').map((value) => String(value || '').trim().toLowerCase());
+    const column = SORT_COLUMNS[rawKey];
+    if (!column) return null;
+    const direction = rawDirection === 'asc' ? 'ASC' : 'DESC';
+    if (['budget', 'deadline', 'posted', 'posted_date'].includes(rawKey)) {
+      return `CASE WHEN ${column} IS NULL THEN 1 ELSE 0 END, ${column} ${direction}`;
+    }
+    return `${column} ${direction}`;
+  }).filter(Boolean);
+  return clauses.length ? `${clauses.join(', ')}, c.id DESC` : SORTS.newest;
+}
+
 export function searchContracts(filters = {}, userId = null) {
   const page = clampInt(filters.page, 1, 1, 100000);
   const pageSize = clampInt(filters.page_size, 20, 1, 100);
@@ -71,7 +102,7 @@ export function searchContracts(filters = {}, userId = null) {
     ? ', EXISTS(SELECT 1 FROM user_favorites uf WHERE uf.contract_id = c.id AND uf.user_id = ?) AS is_favorite'
     : '';
   const dataValues = userId ? [userId, ...values] : [...values];
-  const orderBy = SORTS[filters.sort] || SORTS.newest;
+  const orderBy = sortSql(filters.sort);
   const rows = db.prepare(`SELECT c.* ${favoriteSelect}
     FROM contracts c ${ftsJoin} ${whereSql}
     ORDER BY ${orderBy} LIMIT ? OFFSET ?`).all(...dataValues, pageSize, (page - 1) * pageSize);
@@ -188,20 +219,47 @@ export function updateContract(id, input) {
   return getContract(Number(id));
 }
 
+function hasImportedChanges(existing, input) {
+  const stringFields = ['title', 'description', 'source_name', 'source_url', 'country', 'industry', 'contract_type', 'buyer_type', 'work_mode', 'currency', 'status', 'buyer_name', 'region'];
+  for (const field of stringFields) {
+    if (input[field] !== undefined && String(input[field] ?? '').trim() !== String(existing[field] ?? '').trim()) return true;
+  }
+  for (const field of ['deadline', 'posted_date']) {
+    if (input[field] !== undefined) {
+      const next = normalizeIsoDate(input[field]) || String(input[field] || '');
+      const current = normalizeIsoDate(existing[field]) || String(existing[field] || '');
+      if (next !== current) return true;
+    }
+  }
+  if (input.budget_value !== undefined && input.budget_value !== null && input.budget_value !== '') {
+    if (Number(input.budget_value) !== Number(existing.budget_value || 0)) return true;
+  }
+  return false;
+}
+
+function upsertExistingContract(existing, input) {
+  if (!hasImportedChanges(existing, input)) return { action: 'skipped', reason: 'duplicate_unchanged', contract: getContract(existing.id) };
+  return { action: 'updated', contract: updateContract(existing.id, input) };
+}
+
 export function upsertImportedContract(input) {
   if (input.source_id && input.external_id) {
-    const existing = db.prepare('SELECT id FROM contracts WHERE source_id = ? AND external_id = ?').get(input.source_id, input.external_id);
-    if (existing) return { action: 'updated', contract: updateContract(existing.id, input) };
+    const existing = db.prepare('SELECT * FROM contracts WHERE source_id = ? AND external_id = ?').get(input.source_id, input.external_id);
+    if (existing) return upsertExistingContract(existing, input);
+  }
+  if (input.source_id && input.source_url) {
+    const existing = db.prepare('SELECT * FROM contracts WHERE source_id = ? AND lower(trim(source_url)) = lower(trim(?))').get(input.source_id, input.source_url);
+    if (existing) return upsertExistingContract(existing, input);
   }
   if (input.duplicate_key) {
-    const existing = db.prepare('SELECT id FROM contracts WHERE duplicate_key = ?').get(input.duplicate_key);
-    if (existing) return { action: 'updated', contract: updateContract(existing.id, input) };
+    const existing = db.prepare('SELECT * FROM contracts WHERE duplicate_key = ?').get(input.duplicate_key);
+    if (existing) return upsertExistingContract(existing, input);
   }
   if (input.title && input.country) {
-    const existing = db.prepare(`SELECT id FROM contracts
+    const existing = db.prepare(`SELECT * FROM contracts
       WHERE lower(trim(title)) = lower(trim(?)) AND lower(trim(country)) = lower(trim(?))
         AND COALESCE(date(deadline),'') = COALESCE(date(?),'') LIMIT 1`).get(input.title, input.country, input.deadline || null);
-    if (existing) return { action: 'updated', contract: updateContract(existing.id, input) };
+    if (existing) return upsertExistingContract(existing, input);
   }
   return { action: 'created', contract: createContract(input) };
 }

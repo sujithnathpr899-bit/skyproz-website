@@ -35,6 +35,29 @@ function updateConnectorStatistics(connector, result, ok, error = null) {
     .run(connector.name, ok ? 'ok' : 'failed', successCount, failureCount, imported, updated, skipped, averageDuration, error, connector.key);
 }
 
+function completedImportCount(sourceId) {
+  return db.prepare("SELECT COUNT(*) AS count FROM import_runs WHERE source_id = ? AND status = 'completed'").get(sourceId).count;
+}
+
+function sourceForImportLimit(source, options = {}) {
+  const completedRuns = completedImportCount(source.id);
+  const mode = options.importMode || (completedRuns === 0 && Number(source.contracts_imported || 0) === 0 ? 'initial' : 'daily');
+  const configuredLimit = mode === 'initial'
+    ? Number(source.initial_import_limit || 500)
+    : Number(source.daily_import_limit || 50);
+  const overrideLimit = Number(options.limit || 0);
+  const appliedLimit = Math.max(1, Math.min(1000, overrideLimit || configuredLimit || 50));
+  const parserConfig = parseJson(source.parser_config_json, {}) || {};
+  return {
+    source: {
+      ...source,
+      parser_config_json: JSON.stringify({ ...parserConfig, limit: appliedLimit })
+    },
+    mode,
+    appliedLimit
+  };
+}
+
 export async function testSourceConnection(source) {
   const connector = getConnector(source.connector_key || source.parser_type || 'json');
   const result = await connector.testConnection(source);
@@ -67,32 +90,34 @@ export async function testSourceConnection(source) {
 
 export async function importSource(source, options = {}) {
   const connector = getConnector(source.connector_key || source.parser_type || 'json');
-  if (!source.api_url && source.parser_type === 'manual') return { imported: 0, updated: 0, skipped: 0, warnings: [], failures: [], connector: connector.key };
+  if (!source.api_url && source.parser_type === 'manual') return { imported: 0, updated: 0, skipped: 0, duplicate_skipped: 0, warnings: [], failures: [], connector: connector.key };
+  const plan = sourceForImportLimit(source, options);
   const run = db.prepare("INSERT INTO import_runs(source_id, connector_key, job_type, status) VALUES (?, ?, ?, 'running')")
     .run(source.id, connector.key, options.jobType || 'manual');
   const runId = Number(run.lastInsertRowid);
   db.prepare("UPDATE contract_sources SET last_run_at = CURRENT_TIMESTAMP, scheduler_status = 'running', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(source.id);
-  logConnectorEvent({ sourceId: source.id, connectorKey: connector.key, action: 'import.start', message: 'Import started', metadata: { run_id: runId, job_type: options.jobType || 'manual' } });
+  logConnectorEvent({ sourceId: source.id, connectorKey: connector.key, action: 'import.start', message: 'Import started', metadata: { run_id: runId, job_type: options.jobType || 'manual', import_mode: plan.mode, applied_limit: plan.appliedLimit } });
   try {
-    const result = await connector.import(source, { runId });
+    const result = await connector.import(plan.source, { runId, importMode: plan.mode, limit: plan.appliedLimit });
+    result.duplicate_skipped = Number(result.duplicate_skipped || 0);
     db.prepare(`UPDATE import_runs SET status = 'completed', imported_count = ?, updated_count = ?, skipped_count = ?,
-      warning_count = ?, failure_count = ?, duration_ms = ?, warnings_json = ?, metadata_json = ?, completed_at = CURRENT_TIMESTAMP WHERE id = ?`)
-      .run(result.imported, result.updated, result.skipped, result.warnings.length, result.failures.length, result.duration_ms, JSON.stringify(result.warnings), JSON.stringify({ failures: result.failures, contract_ids: result.contract_ids || [] }), runId);
+      warning_count = ?, failure_count = ?, duplicate_skipped_count = ?, duration_ms = ?, warnings_json = ?, metadata_json = ?, completed_at = CURRENT_TIMESTAMP WHERE id = ?`)
+      .run(result.imported, result.updated, result.skipped, result.warnings.length, result.failures.length, result.duplicate_skipped, result.duration_ms, JSON.stringify(result.warnings), JSON.stringify({ failures: result.failures, contract_ids: result.contract_ids || [], import_mode: plan.mode, applied_limit: plan.appliedLimit, duplicate_skipped: result.duplicate_skipped }), runId);
     db.prepare(`UPDATE contract_sources SET last_imported_at = CURRENT_TIMESTAMP, last_status = 'ok', last_error = NULL,
       last_success_at = CURRENT_TIMESTAMP, failure_count = 0, warning_count = ?, last_duration_ms = ?,
-      contracts_imported = contracts_imported + ?, scheduler_status = CASE WHEN is_active = 1 THEN 'scheduled' ELSE 'disabled' END,
+      contracts_imported = contracts_imported + ?, duplicates_skipped = duplicates_skipped + ?, scheduler_status = CASE WHEN is_active = 1 THEN 'scheduled' ELSE 'disabled' END,
       updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
-      .run(result.warnings.length, result.duration_ms, Number(result.imported || 0) + Number(result.updated || 0), source.id);
+      .run(result.warnings.length, result.duration_ms, Number(result.imported || 0) + Number(result.updated || 0), result.duplicate_skipped, source.id);
     logConnectorEvent({
       sourceId: source.id,
       connectorKey: connector.key,
       action: 'import.complete',
-      message: `Import completed: ${result.imported} new, ${result.updated} updated, ${result.skipped} skipped`,
-      metadata: result,
+      message: `Import completed: ${result.imported} new, ${result.updated} updated, ${result.duplicate_skipped} duplicate skipped, ${result.skipped} total skipped`,
+      metadata: { ...result, import_mode: plan.mode, applied_limit: plan.appliedLimit },
       durationMs: result.duration_ms
     });
     updateConnectorStatistics(connector, result, true);
-    return { connector: connector.key, run_id: runId, ...result };
+    return { connector: connector.key, run_id: runId, import_mode: plan.mode, applied_limit: plan.appliedLimit, ...result };
   } catch (error) {
     db.prepare(`UPDATE import_runs SET status = 'failed', error_message = ?, failure_count = 1, completed_at = CURRENT_TIMESTAMP WHERE id = ?`).run(error.message, runId);
     db.prepare(`UPDATE contract_sources SET last_status = 'failed', last_error = ?, failure_count = failure_count + 1,
@@ -159,7 +184,7 @@ export function connectorStatus() {
       source_format, base_url, api_url, api_key_env, parser_config_json, headers_json, auth_config_json,
       pagination_config_json, rate_limit_ms, sample_contracts_json, last_status, last_error, last_run_at,
       last_success_at, last_imported_at, last_tested_at, last_duration_ms, failure_count, warning_count,
-      contracts_imported, scheduler_status
+      contracts_imported, duplicates_skipped, initial_import_limit, daily_import_limit, scheduler_status
       FROM contract_sources ORDER BY name`).all(),
     queue: db.prepare('SELECT * FROM import_queue ORDER BY priority ASC, run_after ASC LIMIT 20').all(),
     failed_imports: db.prepare("SELECT * FROM import_runs WHERE status = 'failed' ORDER BY started_at DESC LIMIT 20").all(),

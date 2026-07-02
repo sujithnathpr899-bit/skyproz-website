@@ -172,6 +172,59 @@ test('connector manager tests, imports and logs a live RSS source', async () => 
   }
 });
 
+test('first imports use initial limit and later imports skip unchanged duplicates', async () => {
+  const items = Array.from({ length: 8 }, (_, index) => {
+    const id = `volume-${index + 1}`;
+    return `<item>
+      <title>Volume test rope access contract ${index + 1}</title>
+      <description>Official feed item for industrial rope access maintenance ${index + 1}.</description>
+      <link>https://example.test/tender/${id}</link>
+      <guid>${id}</guid>
+      <pubDate>Thu, 02 Jul 2026 10:0${index}:00 GMT</pubDate>
+    </item>`;
+  }).join('');
+  const rss = `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>Volume Procurement</title>${items}</channel></rss>`;
+  const server = http.createServer((request, response) => {
+    response.writeHead(200, { 'content-type': 'application/rss+xml' });
+    response.end(rss);
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const endpoint = `http://127.0.0.1:${server.address().port}/feed.xml`;
+    const parserConfig = {
+      parser_type: 'rss',
+      field_map: { external_id: 'id', title: 'title', description: 'description', source_url: 'link', posted_date: 'published' },
+      limit: 1
+    };
+    const sourceId = db.prepare(`INSERT INTO contract_sources(name, source_url, api_url, country, source_type, parser_type, parser_config_json,
+      connector_key, source_format, schedule, is_active, initial_import_limit, daily_import_limit)
+      VALUES (?, ?, ?, ?, 'government', 'json', ?, 'rss', 'rss', 'hourly', 1, 7, 3)`)
+      .run('Volume RSS Connector', endpoint, endpoint, 'India', JSON.stringify(parserConfig)).lastInsertRowid;
+    let source = db.prepare('SELECT * FROM contract_sources WHERE id = ?').get(sourceId);
+    const first = await importSource(source);
+    assert.equal(first.import_mode, 'initial');
+    assert.equal(first.applied_limit, 7);
+    assert.equal(first.imported, 7);
+    assert.equal(first.duplicate_skipped, 0);
+
+    source = db.prepare('SELECT * FROM contract_sources WHERE id = ?').get(sourceId);
+    const second = await importSource(source);
+    assert.equal(second.import_mode, 'daily');
+    assert.equal(second.applied_limit, 3);
+    assert.equal(second.imported, 0);
+    assert.equal(second.updated, 0);
+    assert.equal(second.duplicate_skipped, 3);
+    assert.equal(second.skipped, 3);
+    const stored = db.prepare('SELECT contracts_imported, duplicates_skipped FROM contract_sources WHERE id = ?').get(sourceId);
+    assert.equal(stored.contracts_imported, 7);
+    assert.equal(stored.duplicates_skipped, 3);
+    const lastRun = db.prepare('SELECT duplicate_skipped_count FROM import_runs WHERE source_id = ? ORDER BY id DESC LIMIT 1').get(sourceId);
+    assert.equal(lastRun.duplicate_skipped_count, 3);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test('connector wizard tests, imports and enables a configured official feed', async () => {
   const rss = `<?xml version="1.0" encoding="UTF-8"?>
     <rss version="2.0"><channel><title>Wizard Procurement</title><item>

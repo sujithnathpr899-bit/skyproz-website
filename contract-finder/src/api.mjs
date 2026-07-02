@@ -287,11 +287,13 @@ export async function handleApi(request, response, url) {
         db.prepare(`UPDATE contract_sources SET connector_key = ?, region = ?, schedule = ?, metadata_json = ?,
           source_format = ?, base_url = ?, api_key_env = ?, headers_json = ?, auth_config_json = ?,
           pagination_config_json = ?, rate_limit_ms = ?, field_mapping_json = ?,
+          initial_import_limit = ?, daily_import_limit = ?,
           scheduler_status = CASE WHEN is_active = 1 THEN 'scheduled' ELSE 'disabled' END WHERE id = ?`)
           .run(body.connector_key || body.parser_type || 'json', body.region || null, body.schedule || 'daily', JSON.stringify(body.metadata || {}),
             body.source_format || body.parser_config?.parser_type || 'json', body.base_url || null, body.api_key_env || null,
             JSON.stringify(body.headers || {}), JSON.stringify(body.auth_config || {}), JSON.stringify(body.pagination_config || {}),
-            Number(body.rate_limit_ms || 0), JSON.stringify(body.field_mapping || {}), result.lastInsertRowid);
+            Number(body.rate_limit_ms || 0), JSON.stringify(body.field_mapping || {}),
+            Number(body.initial_import_limit || 500), Number(body.daily_import_limit || 50), result.lastInsertRowid);
         const discovery = runSourceDiscovery();
         auditLog(adminUser, request, 'source_discovery.save', 'contract_sources', result.lastInsertRowid, { name: body.name });
         sendJson(response, 201, { id: Number(result.lastInsertRowid), discovery }); return true;
@@ -306,11 +308,11 @@ export async function handleApi(request, response, url) {
           VALUES (?, ?, ?, ?, ?, ?, ?, 0)`).run(body.name, body.source_url, body.api_url, body.country || 'Worldwide', body.source_type || 'government', body.parser_type || 'json', JSON.stringify(body.parser_config || {}));
         db.prepare(`UPDATE contract_sources SET connector_key = ?, region = ?, schedule = ?, metadata_json = ?,
           source_format = ?, base_url = ?, api_key_env = ?, headers_json = ?, auth_config_json = ?,
-          pagination_config_json = ?, rate_limit_ms = ?, scheduler_status = 'disabled' WHERE id = ?`)
+          pagination_config_json = ?, rate_limit_ms = ?, initial_import_limit = ?, daily_import_limit = ?, scheduler_status = 'disabled' WHERE id = ?`)
           .run(body.connector_key || body.parser_type || 'json', body.region || null, body.schedule || 'daily', JSON.stringify(body.metadata || {}),
             body.source_format || body.parser_config?.parser_type || 'json', body.base_url || null, body.api_key_env || null,
             JSON.stringify(body.headers || {}), JSON.stringify(body.auth_config || {}), JSON.stringify(body.pagination_config || {}),
-            Number(body.rate_limit_ms || 0), result.lastInsertRowid);
+            Number(body.rate_limit_ms || 0), Number(body.initial_import_limit || 500), Number(body.daily_import_limit || 50), result.lastInsertRowid);
         runSourceDiscovery();
         auditLog(adminUser, request, 'marketplace.install', 'contract_sources', result.lastInsertRowid, { name: body.name });
         sendJson(response, 201, { id: Number(result.lastInsertRowid), installed: true }); return true;
@@ -367,11 +369,12 @@ export async function handleApi(request, response, url) {
           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(body.name, body.source_url, body.api_url || null, body.country || null, body.source_type || 'government', body.parser_type || 'json', JSON.stringify(body.parser_config || {}), Number(body.is_active !== false));
         db.prepare(`UPDATE contract_sources SET connector_key = ?, region = ?, schedule = ?, metadata_json = ?,
           source_format = ?, base_url = ?, api_key_env = ?, headers_json = ?, auth_config_json = ?,
-          pagination_config_json = ?, rate_limit_ms = ?, scheduler_status = CASE WHEN is_active = 1 THEN 'scheduled' ELSE 'disabled' END WHERE id = ?`)
+          pagination_config_json = ?, rate_limit_ms = ?, initial_import_limit = ?, daily_import_limit = ?,
+          scheduler_status = CASE WHEN is_active = 1 THEN 'scheduled' ELSE 'disabled' END WHERE id = ?`)
           .run(body.connector_key || body.parser_type || 'json', body.region || null, body.schedule || 'daily', JSON.stringify(body.metadata || {}),
             body.source_format || body.parser_config?.parser_type || 'json', body.base_url || null, body.api_key_env || null,
             JSON.stringify(body.headers || {}), JSON.stringify(body.auth_config || {}), JSON.stringify(body.pagination_config || {}),
-            Number(body.rate_limit_ms || 0), result.lastInsertRowid);
+            Number(body.rate_limit_ms || 0), Number(body.initial_import_limit || 500), Number(body.daily_import_limit || 50), result.lastInsertRowid);
         auditLog(adminUser, request, 'source.create', 'contract_sources', result.lastInsertRowid, { name: body.name });
         sendJson(response, 201, { id: Number(result.lastInsertRowid) }); return true;
       }
@@ -384,6 +387,7 @@ export async function handleApi(request, response, url) {
           source_format = COALESCE(?, source_format), base_url = COALESCE(?, base_url), api_key_env = COALESCE(?, api_key_env),
           headers_json = COALESCE(?, headers_json), auth_config_json = COALESCE(?, auth_config_json),
           pagination_config_json = COALESCE(?, pagination_config_json), rate_limit_ms = COALESCE(?, rate_limit_ms),
+          initial_import_limit = COALESCE(?, initial_import_limit), daily_import_limit = COALESCE(?, daily_import_limit),
           is_active = COALESCE(?, is_active),
           scheduler_status = CASE WHEN COALESCE(?, is_active) = 1 THEN 'scheduled' ELSE 'disabled' END,
           updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
@@ -393,6 +397,8 @@ export async function handleApi(request, response, url) {
             body.headers ? JSON.stringify(body.headers) : null, body.auth_config ? JSON.stringify(body.auth_config) : null,
             body.pagination_config ? JSON.stringify(body.pagination_config) : null,
             body.rate_limit_ms === undefined ? null : Number(body.rate_limit_ms),
+            body.initial_import_limit === undefined ? null : Number(body.initial_import_limit),
+            body.daily_import_limit === undefined ? null : Number(body.daily_import_limit),
             body.is_active === undefined ? null : Number(Boolean(body.is_active)),
             body.is_active === undefined ? null : Number(Boolean(body.is_active)), route[0]);
         auditLog(adminUser, request, 'source.update', 'contract_sources', route[0], body);

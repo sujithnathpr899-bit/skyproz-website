@@ -26,8 +26,9 @@ db.prepare(`UPDATE contract_sources SET is_active = 0, scheduler_status = 'disab
 const sourceTemplateUpsert = db.prepare(`INSERT INTO contract_sources(
   name, source_url, api_url, country, source_type, parser_type, parser_config_json, is_active,
   connector_key, region, schedule, metadata_json, source_format, base_url, api_key_env,
-  headers_json, auth_config_json, pagination_config_json, rate_limit_ms, scheduler_status
-) VALUES (?, ?, ?, ?, ?, 'json', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  headers_json, auth_config_json, pagination_config_json, rate_limit_ms, initial_import_limit,
+  daily_import_limit, scheduler_status
+) VALUES (?, ?, ?, ?, ?, 'json', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(name) DO UPDATE SET
   source_url = excluded.source_url,
   api_url = excluded.api_url,
@@ -45,6 +46,8 @@ ON CONFLICT(name) DO UPDATE SET
   auth_config_json = excluded.auth_config_json,
   pagination_config_json = excluded.pagination_config_json,
   rate_limit_ms = excluded.rate_limit_ms,
+  initial_import_limit = excluded.initial_import_limit,
+  daily_import_limit = excluded.daily_import_limit,
   scheduler_status = CASE WHEN contract_sources.is_active = 1 THEN 'scheduled' ELSE 'disabled' END,
   updated_at = CURRENT_TIMESTAMP`);
 
@@ -161,11 +164,11 @@ const templates = [
   ['UK Find a Tender', 'https://www.find-tender.service.gov.uk/', 'https://www.find-tender.service.gov.uk/api/1.0/ocdsReleasePackages?limit=10', 'United Kingdom', 'government', ukFindTenderMap, 1, 'uk', 'Europe', 'hourly', { provider: 'UK Find a Tender', api_documentation_url: 'https://www.find-tender.service.gov.uk/api/1.0/ocdsReleasePackages', compliance: 'Official Find a Tender OCDS API.' }, 'rest', 'https://www.find-tender.service.gov.uk', '', { accept: 'application/json' }, {}, { limit: 10 }, 1000, 'scheduled']
 ];
 for (const template of templates) {
-  const [name, sourceUrl, apiUrl, country, sourceType, parserConfig, active, connectorKey, region, schedule, metadata, sourceFormat, baseUrl, apiKeyEnv, headers, auth, pagination, rateLimitMs, schedulerStatus] = template;
+  const [name, sourceUrl, apiUrl, country, sourceType, parserConfig, active, connectorKey, region, schedule, metadata, sourceFormat, baseUrl, apiKeyEnv, headers, auth, pagination, rateLimitMs, schedulerStatus, initialImportLimit = connectorKey === 'ted' ? 250 : 500, dailyImportLimit = 50] = template;
   sourceTemplateUpsert.run(
     name, sourceUrl, apiUrl, country, sourceType, JSON.stringify(parserConfig), Number(active), connectorKey, region, schedule,
     JSON.stringify(metadata), sourceFormat, baseUrl, apiKeyEnv, JSON.stringify(headers), JSON.stringify(auth),
-    JSON.stringify(pagination), Number(rateLimitMs), schedulerStatus
+    JSON.stringify(pagination), Number(rateLimitMs), Number(initialImportLimit), Number(dailyImportLimit), schedulerStatus
   );
 }
 db.prepare("UPDATE contract_sources SET scheduler_status = 'disabled' WHERE is_active = 0").run();

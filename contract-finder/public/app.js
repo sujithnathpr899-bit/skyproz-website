@@ -57,10 +57,10 @@ function contractTableRows(items = []) {
   return items.map((contract) => {
     const score = Number(contract.opportunity_score || contract.ai_score || 0);
     const sourceLabel = contract.configured_source_name || contract.source_name || 'Source';
-    return `<tr tabindex="0" data-contract-id="${contract.id}" data-contract-slug="${escapeHtml(contract.slug)}">
+    return `<tr tabindex="0" data-contract-id="${contract.id}" data-contract-slug="${escapeHtml(contract.slug)}" data-contract-link="${contract.id}">
       <td class="select-col" data-col="select"><input type="checkbox" data-row-select value="${contract.id}" aria-label="Select ${escapeHtml(contract.title)}"></td>
       <td class="score-cell sticky-score" data-col="score" data-sort-value="${score}"><span class="score-pill">${score}</span></td>
-      <td class="title-cell" data-col="title" data-sort-value="${escapeHtml(contract.title)}"><a href="/contract-finder/contracts/${encodeURIComponent(contract.slug)}">${escapeHtml(compactText(contract.title, 86))}</a><small>${escapeHtml(compactText(contract.buyer_name || contract.contract_type || '', 48))}</small></td>
+      <td class="title-cell" data-col="title" data-sort-value="${escapeHtml(contract.title)}"><a href="/contract-finder/contracts/${encodeURIComponent(contract.id)}">${escapeHtml(compactText(contract.title, 86))}</a><small>${escapeHtml(compactText(contract.buyer_name || contract.contract_type || '', 48))}</small></td>
       <td data-col="country" data-sort-value="${escapeHtml(contract.country || '')}">${escapeHtml(compactText(contract.country || 'Worldwide', 24))}</td>
       <td data-col="industry" data-sort-value="${escapeHtml(contract.industry || '')}">${escapeHtml(compactText(contract.industry || 'General', 28))}</td>
       <td data-col="source" data-sort-value="${escapeHtml(sourceLabel)}">${escapeHtml(compactText(sourceLabel, 28))}</td>
@@ -68,7 +68,7 @@ function contractTableRows(items = []) {
       <td data-col="deadline" data-sort-value="${escapeHtml(contract.deadline || '')}">${shortDate(contract.deadline)}</td>
       <td data-col="status" data-sort-value="${escapeHtml(contract.status || '')}"><span class="status ${escapeHtml(contract.status)}">${escapeHtml(statusText(contract.status))}</span></td>
       <td data-col="posted" data-sort-value="${escapeHtml(contract.posted_date || '')}">${shortDate(contract.posted_date)}</td>
-      <td class="actions-cell" data-col="actions"><a class="button button-ghost" href="/contract-finder/contracts/${encodeURIComponent(contract.slug)}">Open</a></td>
+      <td class="actions-cell" data-col="actions"><a class="button button-ghost" href="/contract-finder/contracts/${encodeURIComponent(contract.id)}">Open</a></td>
     </tr>`;
   }).join('');
 }
@@ -120,9 +120,9 @@ function bindDenseTableControls(root = document) {
       shell.querySelectorAll(`[data-col="${checkbox.dataset.columnToggle}"]`).forEach((cell) => { cell.hidden = !checkbox.checked; });
     };
   });
-  root.querySelectorAll('.dense-table tbody tr[data-contract-slug]').forEach((row) => {
+  root.querySelectorAll('.dense-table tbody tr[data-contract-link]').forEach((row) => {
     row.onkeydown = (event) => {
-      if (event.key === 'Enter') location.href = `/contract-finder/contracts/${encodeURIComponent(row.dataset.contractSlug)}`;
+      if (event.key === 'Enter') location.href = `/contract-finder/contracts/${encodeURIComponent(row.dataset.contractLink)}`;
       if (event.key === 'ArrowDown') { event.preventDefault(); row.nextElementSibling?.focus(); }
       if (event.key === 'ArrowUp') { event.preventDefault(); row.previousElementSibling?.focus(); }
     };
@@ -478,7 +478,7 @@ function sourceRows(sources = []) {
     <td>${['rss','xml','json','csv'].includes(source.source_format) ? escapeHtml(source.source_format.toUpperCase()) : '-'}</td>
     <td>${source.api_key_env ? 'Key' : 'None'}</td>
     <td>${shortDate(source.last_success_at || source.last_imported_at || source.last_run_at)}</td>
-    <td>${source.contracts_imported || 0}</td>
+    <td>${source.contracts_imported || 0}<small>dup ${source.duplicates_skipped || 0}</small></td>
     <td>
       <div class="toolbar">
         <button class="button button-ghost" data-test-source="${source.id}">Test</button>
@@ -551,6 +551,7 @@ async function renderConnectorManager() {
         <div class="field-row"><div class="field"><label>Country</label><input name="country"></div><div class="field"><label>Region</label><input name="region"></div></div>
         <div class="field-row"><div class="field"><label>Type</label><select name="source_type"><option value="government">Government</option><option value="private">Private</option></select></div><div class="field"><label>Schedule</label><select name="schedule">${['hourly','daily','weekly','monthly'].map((item)=>option(item,item === 'daily')).join('')}</select></div></div>
         <div class="field-row"><div class="field"><label>API key env name</label><input name="api_key_env" placeholder="SAM_API_KEY"></div><div class="field"><label>Rate limit ms</label><input name="rate_limit_ms" type="number" min="0" value="0"></div></div>
+        <div class="field-row"><div class="field"><label>Initial Import Limit</label><input name="initial_import_limit" type="number" min="1" max="1000" value="500"></div><div class="field"><label>Daily Import Limit</label><input name="daily_import_limit" type="number" min="1" max="1000" value="50"></div></div>
         <div class="field"><label>Headers JSON</label><textarea name="headers" placeholder='{"accept":"application/json"}'>{}</textarea></div>
         <div class="field"><label>Authentication JSON</label><textarea name="auth_config" placeholder='{"api_key_env":"SAM_API_KEY","api_key_header":"x-api-key"}'>{}</textarea></div>
         <div class="field"><label>Pagination JSON</label><textarea name="pagination_config" placeholder='{"limit_param":"limit","page_param":"page"}'>{}</textarea></div>
@@ -585,6 +586,8 @@ async function renderConnectorManager() {
       values.auth_config=JSON.parse(values.auth_config || '{}');
       values.pagination_config=JSON.parse(values.pagination_config || '{}');
       values.rate_limit_ms=Number(values.rate_limit_ms || 0);
+      values.initial_import_limit=Number(values.initial_import_limit || 500);
+      values.daily_import_limit=Number(values.daily_import_limit || 50);
       values.parser_config.parser_type = values.parser_config.parser_type || values.source_format || 'json';
       await api('/admin/sources',{method:'POST',body:JSON.stringify(values)});
       toast('Connector source saved'); setTimeout(()=>location.reload(),450);
@@ -791,6 +794,8 @@ function wizardPayload(form, selected) {
     field_map: values.field_mapping
   };
   values.rate_limit_ms = Number(values.rate_limit_ms || 0);
+  values.initial_import_limit = Number(values.initial_import_limit || 500);
+  values.daily_import_limit = Number(values.daily_import_limit || 50);
   return values;
 }
 
@@ -832,6 +837,7 @@ async function renderConnectorWizard() {
         <div class="field-row"><div class="field"><label>OAuth client ID env</label><input name="oauth_client_id_env" placeholder="OAUTH_CLIENT_ID"></div><div class="field"><label>OAuth secret env</label><input name="oauth_client_secret_env" placeholder="OAUTH_CLIENT_SECRET"></div></div>
         <div class="field-row"><div class="field"><label>Items path</label><input name="items_path" placeholder="results.items"></div><div class="field"><label>Preview/import limit</label><input name="limit" type="number" min="0" placeholder="Optional"></div></div>
         <div class="field-row"><div class="field"><label>Rate limit ms</label><input name="rate_limit_ms" type="number" min="0" value="${Number(selected?.rate_limit_ms || 0)}"></div><div class="field"><label>Base URL</label><input name="base_url" type="url" value="${escapeHtml(selected?.base_url || '')}" placeholder="Optional"></div></div>
+        <div class="field-row"><div class="field"><label>Initial Import Limit</label><input name="initial_import_limit" type="number" min="1" max="1000" value="${Number(selected?.initial_import_limit || 500)}"></div><div class="field"><label>Daily Import Limit</label><input name="daily_import_limit" type="number" min="1" max="1000" value="${Number(selected?.daily_import_limit || 50)}"></div></div>
         <div class="field"><label>Headers JSON</label><textarea name="headers">{}</textarea></div>
         <div class="field"><label>Authentication JSON</label><textarea name="auth_config">{}</textarea></div>
         <div class="field"><label>Pagination JSON</label><textarea name="pagination_config">{}</textarea></div>
@@ -938,10 +944,11 @@ function importActivityRows(items = []) {
     <td><span class="status ${run.status === 'failed' ? 'expired' : ''}">${escapeHtml(statusText(run.status))}</span></td>
     <td>${run.imported_count || 0}</td>
     <td>${run.updated_count || 0}</td>
+    <td>${run.duplicate_skipped_count || 0}</td>
     <td>${run.failure_count || 0}</td>
     <td>${run.duration_ms || 0} ms</td>
     <td>${shortDate(run.started_at)}</td>
-  </tr>`).join('') || '<tr><td colspan="7" class="empty-row">No import runs yet.</td></tr>';
+  </tr>`).join('') || '<tr><td colspan="8" class="empty-row">No import runs yet.</td></tr>';
 }
 
 function countryMap(items = []) {
@@ -954,7 +961,7 @@ function sourceStatusRows(items = []) {
     <td>${escapeHtml(compactText(source.name, 34))}</td>
     <td><span class="status ${source.last_status === 'failed' ? 'expired' : ''}">${escapeHtml(statusText(source.last_status))}</span></td>
     <td>${shortDate(source.last_success_at || source.last_imported_at)}</td>
-    <td>${source.contracts_imported || 0}</td>
+    <td>${source.contracts_imported || 0}<small>dup ${source.duplicates_skipped || 0}</small></td>
   </tr>`).join('') || '<tr><td colspan="4" class="empty-row">No sources configured.</td></tr>';
 }
 
@@ -979,7 +986,7 @@ async function renderAdmin() {
     <div class="dashboard-dense-grid second-row">
       <div class="panel dense-panel wide-panel"><div class="section-heading compact"><div><p class="eyebrow">Recent contracts</p><h2>Latest</h2></div></div><div class="dense-table-wrap"><table class="dense-table"><thead><tr><th>Score</th><th>Title</th><th>Country</th><th>Priority</th><th>Posted</th></tr></thead><tbody>${recentContractRows(analytics.newest_opportunities)}</tbody></table></div></div>
       <div class="panel dense-panel"><div class="section-heading compact"><div><p class="eyebrow">Connector Health</p><h2>Status</h2></div></div><div class="connector-grid dense-connector-grid mini-connectors">${connectorCards(connectors.connectors, sources.items)}</div></div>
-      <div class="panel dense-panel"><div class="section-heading compact"><div><p class="eyebrow">Import Activity</p><h2>Runs</h2></div></div><div class="dense-table-wrap"><table class="dense-table"><thead><tr><th>Connector</th><th>Status</th><th>New</th><th>Upd</th><th>Fail</th><th>Time</th><th>Started</th></tr></thead><tbody>${importActivityRows(analytics.recent_imports)}</tbody></table></div></div>
+      <div class="panel dense-panel"><div class="section-heading compact"><div><p class="eyebrow">Import Activity</p><h2>Runs</h2></div></div><div class="dense-table-wrap"><table class="dense-table"><thead><tr><th>Connector</th><th>Status</th><th>New</th><th>Upd</th><th>Dup</th><th>Fail</th><th>Time</th><th>Started</th></tr></thead><tbody>${importActivityRows(analytics.recent_imports)}</tbody></table></div></div>
     </div>
     <div class="dashboard-dense-grid third-row">
       <div class="panel dense-panel"><div class="section-heading compact"><div><p class="eyebrow">World Map</p><h2>Coverage</h2></div></div>${countryMap(analytics.top_countries)}</div>
@@ -996,6 +1003,7 @@ async function renderAdmin() {
         <div class="field"><label>API URL / Feed URL (optional)</label><input name="api_url" type="url"></div>
         <div class="field-row"><div class="field"><label>Country</label><input name="country"></div><div class="field"><label>Region</label><input name="region"></div></div>
         <div class="field-row"><div class="field"><label>Type</label><select name="source_type"><option value="government">Government</option><option value="private">Private</option></select></div><div class="field"><label>Schedule</label><select name="schedule"><option value="daily">Daily</option><option value="hourly">Hourly</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></div></div>
+        <div class="field-row"><div class="field"><label>Initial Import Limit</label><input name="initial_import_limit" type="number" min="1" max="1000" value="500"></div><div class="field"><label>Daily Import Limit</label><input name="daily_import_limit" type="number" min="1" max="1000" value="50"></div></div>
         <button class="button button-gold">Add source</button>
       </form>
       <form class="panel" id="contract-form">
@@ -1045,7 +1053,7 @@ async function renderAdmin() {
   document.querySelectorAll('[data-toggle-source]').forEach((el)=>el.onclick=async()=>{const active=el.dataset.active !== '1';await api(`/admin/sources/${el.dataset.toggleSource}`,{method:'PATCH',body:JSON.stringify({is_active:active})});toast(active?'Source enabled':'Source disabled');setTimeout(()=>location.reload(),350);});
   document.querySelectorAll('[data-log-source]').forEach((el)=>el.onclick=()=>{location.href='/contract-finder/admin/connectors';});
   document.querySelector('#keyword-form').onsubmit=async(event)=>{event.preventDefault();const values=Object.fromEntries(new FormData(event.currentTarget));values.weight=Number(values.weight || 8);await api('/admin/bot/keywords',{method:'POST',body:JSON.stringify(values)});toast('Keyword added');setTimeout(()=>location.reload(),350);};
-  document.querySelector('#source-form').onsubmit=async(event)=>{event.preventDefault();const values=Object.fromEntries(new FormData(event.currentTarget));values.parser_type='json';await api('/admin/sources',{method:'POST',body:JSON.stringify(values)});toast('Source added');setTimeout(()=>location.reload(),350);};
+  document.querySelector('#source-form').onsubmit=async(event)=>{event.preventDefault();const values=Object.fromEntries(new FormData(event.currentTarget));values.parser_type='json';values.initial_import_limit=Number(values.initial_import_limit || 500);values.daily_import_limit=Number(values.daily_import_limit || 50);await api('/admin/sources',{method:'POST',body:JSON.stringify(values)});toast('Source added');setTimeout(()=>location.reload(),350);};
   document.querySelector('#contract-form').onsubmit=async(event)=>{event.preventDefault();const values=Object.fromEntries(new FormData(event.currentTarget));values.buyer_type='government';values.work_mode='onsite';values.posted_date=new Date().toISOString();await api('/admin/contracts',{method:'POST',body:JSON.stringify(values)});toast('Contract added');event.currentTarget.reset();};
 }
 

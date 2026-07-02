@@ -298,7 +298,7 @@ const connector = {
   async import(source = {}, options = {}) {
     const started = Date.now();
     const rawItems = await connector.fetchContracts(source);
-    const summary = { imported: 0, updated: 0, skipped: 0, warnings: [], failures: [], contract_ids: [], duration_ms: 0 };
+    const summary = { imported: 0, updated: 0, skipped: 0, duplicate_skipped: 0, warnings: [], failures: [], contract_ids: [], duration_ms: 0 };
     for (const item of rawItems) {
       try {
         const normalized = connector.normalize(item, source);
@@ -311,7 +311,9 @@ const connector = {
         for (const warning of validation.warnings) summary.warnings.push({ title: normalized.title || 'Untitled TED notice', warning });
         const result = upsertImportedContract({ ...normalized, import_run_id: options.runId || null });
         if (result.contract?.id) summary.contract_ids.push(result.contract.id);
-        if (result.action === 'created') summary.imported++; else summary.updated++;
+        if (result.action === 'created') summary.imported++;
+        else if (result.action === 'skipped') { summary.skipped++; summary.duplicate_skipped++; }
+        else summary.updated++;
       } catch (error) {
         summary.skipped++;
         summary.failures.push({ error: error.message });
