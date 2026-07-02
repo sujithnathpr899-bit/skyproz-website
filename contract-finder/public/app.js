@@ -7,8 +7,10 @@ let currentUser = null;
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
 const money = (value, currency = '') => value === null || value === undefined || Number.isNaN(Number(value)) ? 'Not disclosed' : `${currency || ''} ${Number(value).toLocaleString()}`.trim();
 const date = (value) => value ? new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(value)) : 'Not stated';
+const shortDate = (value) => value ? new Intl.DateTimeFormat('en', { month: 'short', day: '2-digit', year: '2-digit' }).format(new Date(value)) : '-';
 const boolText = (value) => value ? 'Active' : 'Disabled';
 const statusText = (value) => String(value || 'not tested').replaceAll('_', ' ');
+const compactText = (value, length = 58) => String(value || '-').length > length ? `${String(value).slice(0, length - 1)}...` : String(value || '-');
 
 async function api(path, options = {}) {
   const response = await fetch(`${API}${path}`, {
@@ -31,6 +33,124 @@ function toast(message, isError = false) {
 
 function button(label, href, style = 'button-outline') {
   return `<a class="button ${style}" href="${href}">${escapeHtml(label)}</a>`;
+}
+
+const contractColumns = [
+  ['select', '<input type="checkbox" data-select-all aria-label="Select all contracts">'],
+  ['score', 'Match Score'],
+  ['title', 'Title'],
+  ['country', 'Country'],
+  ['industry', 'Industry'],
+  ['source', 'Source'],
+  ['budget', 'Budget'],
+  ['deadline', 'Deadline'],
+  ['status', 'Status'],
+  ['posted', 'Posted'],
+  ['actions', 'Actions']
+];
+
+function columnSelector(columns, key = 'contracts') {
+  return `<details class="column-menu"><summary class="button button-ghost">Columns</summary><div class="column-menu-panel">${columns.filter(([id]) => id !== 'select' && id !== 'actions').map(([id, label]) => `<label><input type="checkbox" data-column-toggle="${escapeHtml(id)}" data-table-key="${escapeHtml(key)}" checked> ${escapeHtml(label)}</label>`).join('')}</div></details>`;
+}
+
+function contractTableRows(items = []) {
+  return items.map((contract) => {
+    const score = Number(contract.opportunity_score || contract.ai_score || 0);
+    const sourceLabel = contract.configured_source_name || contract.source_name || 'Source';
+    return `<tr tabindex="0" data-contract-id="${contract.id}" data-contract-slug="${escapeHtml(contract.slug)}">
+      <td class="select-col" data-col="select"><input type="checkbox" data-row-select value="${contract.id}" aria-label="Select ${escapeHtml(contract.title)}"></td>
+      <td class="score-cell sticky-score" data-col="score" data-sort-value="${score}"><span class="score-pill">${score}</span></td>
+      <td class="title-cell" data-col="title" data-sort-value="${escapeHtml(contract.title)}"><a href="/contract-finder/contracts/${encodeURIComponent(contract.slug)}">${escapeHtml(compactText(contract.title, 86))}</a><small>${escapeHtml(compactText(contract.buyer_name || contract.contract_type || '', 48))}</small></td>
+      <td data-col="country" data-sort-value="${escapeHtml(contract.country || '')}">${escapeHtml(compactText(contract.country || 'Worldwide', 24))}</td>
+      <td data-col="industry" data-sort-value="${escapeHtml(contract.industry || '')}">${escapeHtml(compactText(contract.industry || 'General', 28))}</td>
+      <td data-col="source" data-sort-value="${escapeHtml(sourceLabel)}">${escapeHtml(compactText(sourceLabel, 28))}</td>
+      <td data-col="budget" data-sort-value="${Number(contract.budget_value || 0)}">${money(contract.budget_value, contract.currency)}</td>
+      <td data-col="deadline" data-sort-value="${escapeHtml(contract.deadline || '')}">${shortDate(contract.deadline)}</td>
+      <td data-col="status" data-sort-value="${escapeHtml(contract.status || '')}"><span class="status ${escapeHtml(contract.status)}">${escapeHtml(statusText(contract.status))}</span></td>
+      <td data-col="posted" data-sort-value="${escapeHtml(contract.posted_date || '')}">${shortDate(contract.posted_date)}</td>
+      <td class="actions-cell" data-col="actions"><a class="button button-ghost" href="/contract-finder/contracts/${encodeURIComponent(contract.slug)}">Open</a></td>
+    </tr>`;
+  }).join('');
+}
+
+function contractDataTable(items = []) {
+  return `<div class="dense-table-wrap virtual-table" tabindex="0">
+    <table class="dense-table contract-table">
+      <thead><tr>${contractColumns.map(([id, label]) => `<th data-col="${escapeHtml(id)}" class="${id === 'score' ? 'sticky-score' : ''}" ${id !== 'select' && id !== 'actions' ? `data-sort-column="${escapeHtml(id)}"` : ''}>${label}</th>`).join('')}</tr></thead>
+      <tbody>${contractTableRows(items) || '<tr><td colspan="11" class="empty-row">No contracts match these filters.</td></tr>'}</tbody>
+    </table>
+  </div>`;
+}
+
+function tableSortValue(row, column) {
+  const cell = row.querySelector(`[data-col="${column}"]`);
+  const value = cell?.dataset.sortValue ?? cell?.textContent ?? '';
+  const numeric = Number(String(value).replace(/[^0-9.-]/g, ''));
+  return Number.isFinite(numeric) && String(value).match(/\d/) ? numeric : String(value).toLowerCase();
+}
+
+function bindDenseTableControls(root = document) {
+  root.querySelectorAll('[data-select-all]').forEach((checkbox) => {
+    checkbox.onchange = () => {
+      const table = checkbox.closest('table');
+      table.querySelectorAll('[data-row-select]').forEach((item) => { item.checked = checkbox.checked; });
+      updateBulkCount(root);
+    };
+  });
+  root.querySelectorAll('[data-row-select]').forEach((checkbox) => checkbox.onchange = () => updateBulkCount(root));
+  root.querySelectorAll('[data-sort-column]').forEach((header) => {
+    header.onclick = () => {
+      const table = header.closest('table');
+      const column = header.dataset.sortColumn;
+      const direction = header.dataset.direction === 'asc' ? 'desc' : 'asc';
+      header.dataset.direction = direction;
+      const rows = [...table.querySelectorAll('tbody tr')].filter((row) => row.querySelector('[data-col]'));
+      rows.sort((a, b) => {
+        const left = tableSortValue(a, column);
+        const right = tableSortValue(b, column);
+        const result = typeof left === 'number' && typeof right === 'number' ? left - right : String(left).localeCompare(String(right));
+        return direction === 'asc' ? result : -result;
+      });
+      rows.forEach((row) => table.tBodies[0].append(row));
+    };
+  });
+  root.querySelectorAll('[data-column-toggle]').forEach((checkbox) => {
+    checkbox.onchange = () => {
+      const shell = checkbox.closest('.dense-page, .panel, section') || root;
+      shell.querySelectorAll(`[data-col="${checkbox.dataset.columnToggle}"]`).forEach((cell) => { cell.hidden = !checkbox.checked; });
+    };
+  });
+  root.querySelectorAll('.dense-table tbody tr[data-contract-slug]').forEach((row) => {
+    row.onkeydown = (event) => {
+      if (event.key === 'Enter') location.href = `/contract-finder/contracts/${encodeURIComponent(row.dataset.contractSlug)}`;
+      if (event.key === 'ArrowDown') { event.preventDefault(); row.nextElementSibling?.focus(); }
+      if (event.key === 'ArrowUp') { event.preventDefault(); row.previousElementSibling?.focus(); }
+    };
+  });
+}
+
+function selectedContractIds(root = document) {
+  return [...root.querySelectorAll('[data-row-select]:checked')].map((item) => item.value);
+}
+
+function updateBulkCount(root = document) {
+  const counter = root.querySelector('[data-bulk-count]');
+  if (counter) counter.textContent = `${selectedContractIds(root).length} selected`;
+}
+
+function savedViews() {
+  try { return JSON.parse(localStorage.getItem('skyprozSavedContractViews') || '[]'); } catch { return []; }
+}
+
+function saveCurrentView(name, params) {
+  const views = savedViews().filter((view) => view.name !== name);
+  views.push({ name, query: String(params) });
+  localStorage.setItem('skyprozSavedContractViews', JSON.stringify(views.slice(-12)));
+}
+
+function savedViewSelector() {
+  const views = savedViews();
+  return `<select id="saved-view"><option value="">Saved views</option>${views.map((view) => `<option value="${escapeHtml(view.query)}">${escapeHtml(view.name)}</option>`).join('')}</select>`;
 }
 
 function dashboardNav() {
@@ -130,22 +250,68 @@ function filterForm(options, params) {
 }
 
 async function renderSearch() {
-  const params = new URLSearchParams(location.search); params.set('page_size','12');
+  const params = new URLSearchParams(location.search);
+  if (!params.get('page_size')) params.set('page_size','50');
   const [results, options] = await Promise.all([api(`/contracts?${params}`), api('/filter-options')]);
-  app.innerHTML = `<section class="page">
-    <div class="section-heading"><div><p class="eyebrow">Contract database</p><h1>Search Opportunities</h1></div><p>Filter contracts by geography, source, buyer profile, budget, deadline and Skyproz match score.</p></div>
-    <div class="search-layout">
-      ${filterForm(options, params)}
-      <div>
-        <div class="results-header"><p><strong>${results.pagination.total}</strong> contracts found</p><div class="toolbar"><button class="button button-ghost" id="save-search">Save search</button></div></div>
-        <div class="card-grid">${results.items.map(contractCard).join('') || '<div class="empty">No contracts match these filters.</div>'}</div>
-        <div class="pagination"><button class="button button-ghost" id="prev" ${results.pagination.page <= 1 ? 'disabled' : ''}>Previous</button><span class="button button-ghost">Page ${results.pagination.page} of ${results.pagination.pages}</span><button class="button button-ghost" id="next" ${results.pagination.page >= results.pagination.pages ? 'disabled' : ''}>Next</button></div>
+  const quickChips = [
+    ['Rope access', 'keyword', 'rope access'],
+    ['Marine', 'industry', 'Marine'],
+    ['India', 'country', 'India'],
+    ['High score', 'min_score', '75'],
+    ['Deadline first', 'sort', 'deadline']
+  ];
+  app.innerHTML = `<section class="page dense-page">
+    <div class="section-heading dense-heading"><div><p class="eyebrow">Contract database</p><h1>Search Opportunities</h1></div><p>Dense table view with server-side pagination, quick filters, saved views and keyboard navigation.</p></div>
+    <div class="dense-toolbar sticky-toolbar">
+      <form id="quick-search" class="dense-search"><input name="keyword" value="${escapeHtml(params.get('keyword') || '')}" placeholder="Search contracts, buyers, services..."><button class="button button-gold">Search</button></form>
+      <div class="toolbar">
+        <span class="chip">${results.pagination.total} contracts</span>
+        <label class="compact-select">Rows <select id="page-size">${[25,50,100].map((size)=>option(String(size), params.get('page_size'), String(size))).join('')}</select></label>
+        ${savedViewSelector()}
+        <button class="button button-ghost" id="save-view" type="button">Save view</button>
+        <button class="button button-ghost" id="save-search" type="button">Save search</button>
+        ${columnSelector(contractColumns)}
       </div>
+      <div class="chip-row quick-filters">${quickChips.map(([label, key, value]) => {
+        const q = new URLSearchParams(params); q.set(key, value); q.set('page', '1');
+        return `<a class="chip ${params.get(key) === value ? 'chip-gold' : ''}" href="/contract-finder/search?${q}">${escapeHtml(label)}</a>`;
+      }).join('')}</div>
     </div>
+    <details class="filter-drawer">
+      <summary class="button button-outline">Advanced filters</summary>
+      ${filterForm(options, params)}
+    </details>
+    <div class="bulk-toolbar sticky-filters">
+      <span data-bulk-count>0 selected</span>
+      <button class="button button-ghost" id="bulk-open" type="button">Open first</button>
+      <button class="button button-ghost" id="bulk-save" type="button">Save selected</button>
+      <label class="compact-check"><input type="checkbox" id="infinite-mode" ${params.get('page_size') === '100' ? 'checked' : ''}> Infinite-style 100 rows</label>
+    </div>
+    ${contractDataTable(results.items)}
+    <div class="pagination sticky-pagination"><button class="button button-ghost" id="prev" ${results.pagination.page <= 1 ? 'disabled' : ''}>Previous</button><span class="button button-ghost">Page ${results.pagination.page} of ${results.pagination.pages}</span><button class="button button-ghost" id="next" ${results.pagination.page >= results.pagination.pages ? 'disabled' : ''}>Next</button></div>
   </section>`;
-  document.querySelector('#filters').addEventListener('submit',(event) => { event.preventDefault(); const q = new URLSearchParams(new FormData(event.currentTarget)); location.search = q; });
+  bindDenseTableControls(app);
+  document.querySelector('#quick-search').addEventListener('submit',(event) => { event.preventDefault(); const q = new URLSearchParams(location.search); q.set('keyword', new FormData(event.currentTarget).get('keyword') || ''); q.set('page','1'); location.search = q; });
+  document.querySelector('#filters').addEventListener('submit',(event) => { event.preventDefault(); const q = new URLSearchParams(new FormData(event.currentTarget)); q.set('page_size', params.get('page_size') || '50'); location.search = q; });
+  document.querySelector('#page-size').onchange = (event) => { const q = new URLSearchParams(location.search); q.set('page_size', event.target.value); q.set('page','1'); location.search = q; };
+  document.querySelector('#infinite-mode').onchange = (event) => { const q = new URLSearchParams(location.search); q.set('page_size', event.target.checked ? '100' : '50'); q.set('page','1'); location.search = q; };
+  document.querySelector('#saved-view').onchange = (event) => { if (event.target.value) location.href = `/contract-finder/search?${event.target.value}`; };
+  document.querySelector('#save-view').onclick = () => { const name = prompt('Name this dense view'); if (!name) return; saveCurrentView(name, params); toast('View saved on this browser'); };
   document.querySelector('#prev').onclick = () => setPage(results.pagination.page - 1);
   document.querySelector('#next').onclick = () => setPage(results.pagination.page + 1);
+  document.querySelector('#bulk-open').onclick = () => {
+    const first = document.querySelector('[data-row-select]:checked')?.closest('tr')?.dataset.contractSlug;
+    if (first) location.href = `/contract-finder/contracts/${encodeURIComponent(first)}`; else toast('Select at least one contract', true);
+  };
+  document.querySelector('#bulk-save').onclick = async () => {
+    if (!currentUser) return location.href='/contract-finder/login';
+    const ids = selectedContractIds(app);
+    if (!ids.length) return toast('Select contracts first', true);
+    try {
+      for (const id of ids) await api(`/contracts/${id}/favorite`,{method:'POST',body:'{}'});
+      toast(`${ids.length} contract(s) saved`);
+    } catch(error) { toast(error.message,true); }
+  };
   document.querySelector('#save-search').onclick = async () => {
     if (!currentUser) return location.href='/contract-finder/login';
     const name = prompt('Name this saved search'); if (!name) return;
@@ -276,39 +442,49 @@ async function renderWatchlists() {
   document.querySelector('#watchlist-form').onsubmit=async(event)=>{event.preventDefault();const values=Object.fromEntries(new FormData(event.currentTarget));await api('/watchlists',{method:'POST',body:JSON.stringify(values)});toast('Watchlist created');setTimeout(()=>location.reload(),350);};
 }
 
-function connectorCards(connectors = []) {
-  return connectors.map((connector) => `<article class="connector-card">
-    <div class="card-top"><strong>${escapeHtml(connector.name)}</strong><span class="status ${connector.statistics?.last_status === 'failed' ? 'expired' : ''}">${escapeHtml(statusText(connector.statistics?.last_status))}</span></div>
-    <p>${escapeHtml(connector.documentation || 'Configurable procurement connector.')}</p>
-    <dl class="mini-list">
-      <div><dt>Key</dt><dd>${escapeHtml(connector.key)}</dd></div>
-      <div><dt>Success</dt><dd>${connector.statistics?.success_count || 0}</dd></div>
-      <div><dt>Imported</dt><dd>${connector.statistics?.total_imported || 0}</dd></div>
-      <div><dt>Failures</dt><dd>${connector.statistics?.failure_count || 0}</dd></div>
-      <div><dt>Avg duration</dt><dd>${connector.statistics?.average_duration_ms || 0} ms</dd></div>
-    </dl>
-  </article>`).join('');
+function connectorCards(connectors = [], sources = []) {
+  return connectors.map((connector) => {
+    const source = sources.find((item) => (item.connector_key || item.parser_type) === connector.key);
+    const stats = connector.statistics || {};
+    const failures = Number(stats.failure_count || source?.failure_count || 0);
+    const success = Number(stats.success_count || 0);
+    const imported = Number(stats.total_imported || source?.contracts_imported || 0);
+    const health = source?.health_score ?? (success + failures ? Math.round((success / Math.max(1, success + failures)) * 100) : 0);
+    return `<article class="connector-card compact-connector">
+      <div class="connector-card-top"><span class="status ${failures ? 'expired' : ''}">${escapeHtml(statusText(stats.last_status || source?.last_status || 'not tested'))}</span><strong>${escapeHtml(compactText(connector.name, 28))}</strong></div>
+      <div class="connector-meta"><span>${escapeHtml(source?.region || connector.category || 'Global')}</span><span>Health ${health}%</span></div>
+      <dl class="connector-metrics">
+        <div><dt>Success</dt><dd>${success}</dd></div>
+        <div><dt>Imported</dt><dd>${imported}</dd></div>
+        <div><dt>Fail</dt><dd>${failures}</dd></div>
+        <div><dt>Sync</dt><dd>${shortDate(source?.last_success_at || stats.last_imported_at)}</dd></div>
+      </dl>
+      <div class="connector-actions">
+        <button class="button button-ghost" ${source?.id ? `data-test-source="${source.id}"` : 'disabled'}>Test</button>
+        <button class="button button-ghost" ${source?.id ? `data-import-source="${source.id}"` : 'disabled'}>Import</button>
+        <a class="button button-ghost" href="/contract-finder/admin/connector-wizard${source?.id ? `?connector=source:${source.id}` : ''}">Configure</a>
+      </div>
+    </article>`;
+  }).join('');
 }
 
 function sourceRows(sources = []) {
   return sources.map((source)=>`<tr>
-    <td><strong>${escapeHtml(source.name)}</strong><small>${escapeHtml(source.connector_key || source.parser_type || 'json')}</small></td>
-    <td>${escapeHtml(source.source_format || 'json')}</td>
+    <td><strong>${escapeHtml(compactText(source.name, 42))}</strong><small>${escapeHtml(source.connector_key || source.parser_type || 'json')}</small></td>
+    <td>${escapeHtml(source.source_type || source.source_format || 'json')}</td>
     <td>${escapeHtml(source.country || '-')}</td>
-    <td>${escapeHtml(source.region || '-')}</td>
-    <td>${escapeHtml(source.schedule || 'daily')}</td>
     <td><span class="status ${source.last_status === 'failed' ? 'expired' : ''}">${escapeHtml(statusText(source.last_status))}</span></td>
-    <td>${date(source.last_run_at || source.last_imported_at)}</td>
-    <td>${date(source.last_success_at)}</td>
+    <td>${source.api_url ? 'Yes' : 'No'}</td>
+    <td>${['rss','xml','json','csv'].includes(source.source_format) ? escapeHtml(source.source_format.toUpperCase()) : '-'}</td>
+    <td>${source.api_key_env ? 'Key' : 'None'}</td>
+    <td>${shortDate(source.last_success_at || source.last_imported_at || source.last_run_at)}</td>
     <td>${source.contracts_imported || 0}</td>
-    <td>${source.failure_count || 0}</td>
-    <td>${source.last_duration_ms || 0} ms</td>
-    <td>${escapeHtml(source.scheduler_status || (source.is_active ? 'scheduled' : 'disabled'))}</td>
     <td>
       <div class="toolbar">
         <button class="button button-ghost" data-test-source="${source.id}">Test</button>
         <button class="button button-ghost" data-import-source="${source.id}">Import</button>
         <button class="button button-ghost" data-log-source="${source.id}">Logs</button>
+        <a class="button button-ghost" href="/contract-finder/admin/connector-wizard?connector=source:${source.id}">Config</a>
         <button class="button ${source.is_active ? 'button-danger' : 'button-outline'}" data-toggle-source="${source.id}" data-active="${source.is_active ? '1' : '0'}">${source.is_active ? 'Disable' : 'Enable'}</button>
       </div>
     </td>
@@ -383,7 +559,7 @@ async function renderConnectorManager() {
       </form>
       <div class="panel">
         <h2>Connector Health</h2>
-        <div class="connector-grid">${connectorCards(data.connectors)}</div>
+        <div class="connector-grid dense-connector-grid">${connectorCards(data.connectors, data.sources)}</div>
       </div>
     </div>
     <div class="panel" style="margin-top:20px">
@@ -392,7 +568,7 @@ async function renderConnectorManager() {
     </div>
     <div class="panel" style="margin-top:20px">
       <div class="section-heading compact"><div><p class="eyebrow">Configured sources</p><h2>Live Connectors & Templates</h2></div><p>Enable only official public APIs or permitted feeds. Restricted portals can remain disabled as configuration templates.</p></div>
-      <div class="table-wrap"><table><thead><tr><th>Name</th><th>Format</th><th>Country</th><th>Region</th><th>Schedule</th><th>Health</th><th>Last run</th><th>Last success</th><th>Imported</th><th>Failures</th><th>Response</th><th>Scheduler</th><th>Actions</th></tr></thead><tbody>${sourceRows(data.sources)}</tbody></table></div>
+      <div class="table-wrap dense-table-wrap"><table class="dense-table"><thead><tr><th>Source</th><th>Type</th><th>Country</th><th>Status</th><th>API</th><th>Feed</th><th>Auth</th><th>Last Sync</th><th>Contracts</th><th>Actions</th></tr></thead><tbody>${sourceRows(data.sources)}</tbody></table></div>
     </div>
     <div class="admin-grid" style="margin-top:20px">
       <div class="panel"><h2>Sample Contracts</h2><div id="sample-preview">${samplePreview(data.sources.find((source)=>source.sample_contracts_json && source.sample_contracts_json !== '[]'))}</div></div>
@@ -746,6 +922,42 @@ function matchDistribution(items = []) {
   return items.map((item) => `<div class="metric"><strong>${item.count}</strong><span>${escapeHtml(item.bucket)} AI matches</span></div>`).join('') || '<div class="empty">No AI match data yet.</div>';
 }
 
+function recentContractRows(items = []) {
+  return items.map((item) => `<tr>
+    <td><span class="score-pill">${item.ai_score || 0}</span></td>
+    <td><a href="/contract-finder/contracts/${escapeHtml(item.slug)}">${escapeHtml(compactText(item.title, 64))}</a></td>
+    <td>${escapeHtml(item.country || 'Worldwide')}</td>
+    <td>${escapeHtml(item.ai_priority || 'Low')}</td>
+    <td>${shortDate(item.created_at)}</td>
+  </tr>`).join('') || '<tr><td colspan="5" class="empty-row">No recent contracts.</td></tr>';
+}
+
+function importActivityRows(items = []) {
+  return items.map((run) => `<tr>
+    <td>${escapeHtml(run.connector_key || 'manual')}</td>
+    <td><span class="status ${run.status === 'failed' ? 'expired' : ''}">${escapeHtml(statusText(run.status))}</span></td>
+    <td>${run.imported_count || 0}</td>
+    <td>${run.updated_count || 0}</td>
+    <td>${run.failure_count || 0}</td>
+    <td>${run.duration_ms || 0} ms</td>
+    <td>${shortDate(run.started_at)}</td>
+  </tr>`).join('') || '<tr><td colspan="7" class="empty-row">No import runs yet.</td></tr>';
+}
+
+function countryMap(items = []) {
+  const max = Math.max(1, ...items.map((item) => Number(item.count || 0)));
+  return `<div class="map-panel">${items.map((item) => `<div class="map-row"><span>${escapeHtml(item.country || 'Worldwide')}</span><meter min="0" max="${max}" value="${item.count || 0}"></meter><strong>${item.count || 0}</strong></div>`).join('') || '<div class="empty compact-empty">No country data yet.</div>'}</div>`;
+}
+
+function sourceStatusRows(items = []) {
+  return items.slice(0, 12).map((source) => `<tr>
+    <td>${escapeHtml(compactText(source.name, 34))}</td>
+    <td><span class="status ${source.last_status === 'failed' ? 'expired' : ''}">${escapeHtml(statusText(source.last_status))}</span></td>
+    <td>${shortDate(source.last_success_at || source.last_imported_at)}</td>
+    <td>${source.contracts_imported || 0}</td>
+  </tr>`).join('') || '<tr><td colspan="4" class="empty-row">No sources configured.</td></tr>';
+}
+
 async function renderAdmin() {
   if (!(await requireLogin())) return; if(currentUser.role!=='admin'){app.innerHTML='<section class="page"><div class="empty">Administrator access required.</div></section>';return;}
   const [analytics,sources,users,connectors,keywords]=await Promise.all([api('/admin/analytics'),api('/admin/sources'),api('/admin/users'),api('/admin/connectors'),api('/admin/bot/keywords')]);
@@ -753,28 +965,28 @@ async function renderAdmin() {
   app.innerHTML=`<section class="page">
     <div class="section-heading"><div><p class="eyebrow">Operations control</p><h1>Admin Panel</h1></div><div class="toolbar"><button class="button button-outline" id="snapshot">Save analytics</button><button class="button button-danger" id="dedupe">Remove duplicates</button></div></div>
     ${dashboardNav()}
-    <div class="metric-grid">${['contracts','open_contracts','new_today','closing_soon','verified_contracts','users','premium_users','active_alerts','sources','countries','industries','import_success_rate'].map((key)=>`<div class="metric"><strong>${analytics[key] ?? 0}</strong><span>${key.replaceAll('_',' ')}</span></div>`).join('')}</div>
-    <div class="panel" style="margin-bottom:20px">
-      <div class="section-heading compact"><div><p class="eyebrow">Automation</p><h2>Scheduled Jobs</h2></div><p>Run imports, alerts, cleanup and analytics manually when needed.</p></div>
+    <div class="dense-toolbar sticky-toolbar">
       <div class="toolbar"><button class="button button-gold" id="run-bot">Run AI Bot Now</button>${['hourly','daily','weekly','monthly'].map((job)=>`<button class="button button-ghost" data-run-job="${job}">Run ${job}</button>`).join('')}</div>
     </div>
-    <div class="admin-grid" style="margin-bottom:20px">
-      <div class="panel">
-        <div class="section-heading compact"><div><p class="eyebrow">AI procurement bot</p><h2>Live Status</h2></div><p>${bot.latest_run ? `Last run: ${escapeHtml(bot.latest_run.status)} at ${date(bot.latest_run.started_at)}` : 'No bot run yet.'}</p></div>
-        <div class="metric-grid compact-metrics">
-          <div class="metric"><strong>${bot.keywords || 0}</strong><span>Active keywords</span></div>
-          <div class="metric"><strong>${bot.unread_notifications || 0}</strong><span>Unread alerts</span></div>
-          <div class="metric"><strong>${bot.latest_run?.sources_checked || 0}</strong><span>Sources checked</span></div>
-          <div class="metric"><strong>${bot.latest_run?.high_value_matches || 0}</strong><span>High matches</span></div>
-        </div>
-        <h3>AI Match Distribution</h3>
-        <div class="metric-grid compact-metrics">${matchDistribution(bot.ai_match_distribution)}</div>
-      </div>
-      <div class="panel">
-        <h2>Dashboard Notifications</h2>
-        <div class="list">${botNotificationList(bot)}</div>
-      </div>
+    <div class="metric-grid dashboard-metrics">
+      <div class="metric"><strong>${analytics.contracts || 0}</strong><span>Total Contracts</span></div>
+      <div class="metric"><strong>${connectors.summary?.healthy_connectors || 0}</strong><span>Working Connectors</span></div>
+      <div class="metric"><strong>${analytics.sources || 0}</strong><span>Active Sources</span></div>
+      <div class="metric"><strong>${connectors.summary?.contracts_imported_today || 0}</strong><span>Today's Imports</span></div>
+      <div class="metric"><strong>${connectors.summary?.failed_connectors || 0}</strong><span>Failed Imports</span></div>
+      <div class="metric"><strong>${bot.latest_run?.high_value_matches || 0}</strong><span>AI Matches</span></div>
     </div>
+    <div class="dashboard-dense-grid second-row">
+      <div class="panel dense-panel wide-panel"><div class="section-heading compact"><div><p class="eyebrow">Recent contracts</p><h2>Latest</h2></div></div><div class="dense-table-wrap"><table class="dense-table"><thead><tr><th>Score</th><th>Title</th><th>Country</th><th>Priority</th><th>Posted</th></tr></thead><tbody>${recentContractRows(analytics.newest_opportunities)}</tbody></table></div></div>
+      <div class="panel dense-panel"><div class="section-heading compact"><div><p class="eyebrow">Connector Health</p><h2>Status</h2></div></div><div class="connector-grid dense-connector-grid mini-connectors">${connectorCards(connectors.connectors, sources.items)}</div></div>
+      <div class="panel dense-panel"><div class="section-heading compact"><div><p class="eyebrow">Import Activity</p><h2>Runs</h2></div></div><div class="dense-table-wrap"><table class="dense-table"><thead><tr><th>Connector</th><th>Status</th><th>New</th><th>Upd</th><th>Fail</th><th>Time</th><th>Started</th></tr></thead><tbody>${importActivityRows(analytics.recent_imports)}</tbody></table></div></div>
+    </div>
+    <div class="dashboard-dense-grid third-row">
+      <div class="panel dense-panel"><div class="section-heading compact"><div><p class="eyebrow">World Map</p><h2>Coverage</h2></div></div>${countryMap(analytics.top_countries)}</div>
+      <div class="panel dense-panel"><div class="section-heading compact"><div><p class="eyebrow">AI Analytics</p><h2>Matches</h2></div></div><div class="metric-grid compact-metrics">${matchDistribution(bot.ai_match_distribution || analytics.ai_match_distribution)}</div><div class="notice">Keywords: ${bot.keywords || 0} | Sources checked: ${bot.latest_run?.sources_checked || 0} | Unread alerts: ${bot.unread_notifications || 0}</div></div>
+      <div class="panel dense-panel"><div class="section-heading compact"><div><p class="eyebrow">Source Status</p><h2>Sources</h2></div></div><div class="dense-table-wrap"><table class="dense-table"><thead><tr><th>Source</th><th>Status</th><th>Sync</th><th>Contracts</th></tr></thead><tbody>${sourceStatusRows(sources.items)}</tbody></table></div></div>
+    </div>
+    <div class="panel dense-panel" style="margin-top:8px"><div class="section-heading compact"><div><p class="eyebrow">Notifications</p><h2>Dashboard Alerts</h2></div></div><div class="list compact-list">${botNotificationList(bot)}</div></div>
     <div class="admin-grid">
       <form class="panel" id="source-form">
         <h2>Add Source</h2>
@@ -799,7 +1011,7 @@ async function renderAdmin() {
     </div>
     <div class="panel" style="margin-top:20px">
       <div class="section-heading compact"><div><p class="eyebrow">Procurement portals</p><h2>Connector Status</h2></div><p>Named connectors are configurable. Add approved API/RSS/XML/CSV feeds in source settings.</p></div>
-      <div class="connector-grid">${connectorCards(connectors.connectors)}</div>
+      <div class="connector-grid dense-connector-grid">${connectorCards(connectors.connectors, sources.items)}</div>
     </div>
     <div class="panel" style="margin-top:20px">
       <div class="section-heading compact"><div><p class="eyebrow">AI matching</p><h2>Keyword Manager</h2></div><p>Add service keywords for rope access, painting, marine, shutdown, wind, NDT and other Skyproz services.</p></div>
@@ -814,7 +1026,7 @@ async function renderAdmin() {
     </div>
     <div class="panel" style="margin-top:20px">
       <h2>Contract Sources</h2>
-      <div class="table-wrap"><table><thead><tr><th>Name</th><th>Format</th><th>Country</th><th>Region</th><th>Schedule</th><th>Status</th><th>Last run</th><th>Last success</th><th>Imported</th><th>Failures</th><th>Response</th><th>Scheduler</th><th>Actions</th></tr></thead><tbody>${sourceRows(sources.items)}</tbody></table></div>
+      <div class="table-wrap dense-table-wrap"><table class="dense-table"><thead><tr><th>Source</th><th>Type</th><th>Country</th><th>Status</th><th>API</th><th>Feed</th><th>Auth</th><th>Last Sync</th><th>Contracts</th><th>Actions</th></tr></thead><tbody>${sourceRows(sources.items)}</tbody></table></div>
     </div>
     <div class="admin-grid" style="margin-top:20px">
       <div class="panel"><h2>Recent Imports</h2><div class="list">${(analytics.recent_imports || []).map((run)=>`<div class="list-item"><div><h3>${escapeHtml(run.connector_key || 'manual')}</h3><p>${escapeHtml(run.status)} | imported ${run.imported_count || 0}, updated ${run.updated_count || 0}, skipped ${run.skipped_count || 0}</p></div><span>${date(run.started_at)}</span></div>`).join('') || '<div class="empty">No import runs yet.</div>'}</div></div>
