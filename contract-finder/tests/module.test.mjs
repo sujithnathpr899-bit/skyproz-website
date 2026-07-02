@@ -45,6 +45,9 @@ test('contracts can be created, filtered, updated and paginated', () => {
   const search = searchContracts({ keyword: 'rope access', country: 'India', min_budget: 100000, page_size: 10 });
   assert.equal(search.pagination.total, 1);
   assert.equal(search.items[0].title, created.title);
+  const denseSearch = searchContracts({ status: 'open', page_size: 100, sort: 'score:desc,title:asc' });
+  assert.equal(denseSearch.pagination.page_size, 100);
+  assert.ok(denseSearch.items.some((item) => item.id === created.id));
   const updated = updateContract(created.id, { verified: true, work_mode: 'hybrid' });
   assert.equal(updated.verified, true);
   assert.equal(updated.work_mode, 'hybrid');

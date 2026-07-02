@@ -54,6 +54,7 @@ function renderSitemap(request, response) {
   const urls = [
     `<url><loc>${config.appOrigin}/contract-finder/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>`,
     `<url><loc>${config.appOrigin}/contract-finder/search</loc><changefreq>daily</changefreq><priority>0.9</priority></url>`,
+    `<url><loc>${config.appOrigin}/contract-finder/contracts</loc><changefreq>daily</changefreq><priority>0.9</priority></url>`,
     ...contracts.map((contract) => `<url><loc>${config.appOrigin}/contract-finder/contracts/${escapeHtml(contract.slug)}</loc><lastmod>${new Date(contract.updated_at).toISOString()}</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>`)
   ].join('');
   const xml = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`;
@@ -79,6 +80,7 @@ export const server = createServer(async (request, response) => {
     }
     const pages = new Map([
       ['/contract-finder/', 'home'], ['/contract-finder', 'home'], ['/contract-finder/search', 'search'],
+      ['/contract-finder/contracts', 'contracts'], ['/contract-finder/contracts/', 'contracts'],
       ['/contract-finder/dashboard', 'dashboard'], ['/contract-finder/favorites', 'favorites'],
       ['/contract-finder/saved-searches', 'saved'], ['/contract-finder/alerts', 'alerts'],
       ['/contract-finder/watchlists', 'watchlists'], ['/contract-finder/admin', 'admin'],

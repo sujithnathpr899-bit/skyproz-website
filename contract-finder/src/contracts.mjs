@@ -293,6 +293,7 @@ export function listFilterOptions() {
     industries: distinct('industry'),
     buyers: distinct('buyer_name'),
     contract_types: distinct('contract_type'),
+    statuses: distinct('status'),
     ai_categories: distinct('ai_category'),
     business_units: distinct('suggested_business_unit'),
     categories: db.prepare('SELECT id, name, slug FROM contract_categories ORDER BY name').all(),

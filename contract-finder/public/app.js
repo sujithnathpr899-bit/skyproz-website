@@ -153,9 +153,79 @@ function savedViewSelector() {
   return `<select id="saved-view"><option value="">Saved views</option>${views.map((view) => `<option value="${escapeHtml(view.query)}">${escapeHtml(view.name)}</option>`).join('')}</select>`;
 }
 
+function csvCell(value) {
+  return `"${String(value ?? '').replaceAll('"', '""')}"`;
+}
+
+function downloadTextFile(filename, content, contentType) {
+  const blob = new Blob([content], { type: contentType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function contractExportRows(items = []) {
+  return items.map((contract) => ({
+    score: contract.opportunity_score || contract.ai_score || 0,
+    title: contract.title,
+    buyer: contract.buyer_name || contract.buyer_type || '',
+    country: contract.country || '',
+    industry: contract.industry || '',
+    source: contract.configured_source_name || contract.source_name || '',
+    budget: contract.budget_value ?? '',
+    currency: contract.currency || '',
+    deadline: contract.deadline || '',
+    status: contract.status || '',
+    posted: contract.posted_date || '',
+    original_tender: contract.source_url || ''
+  }));
+}
+
+function exportContracts(items = [], format = 'csv') {
+  const rows = contractExportRows(items);
+  const headers = ['score', 'title', 'buyer', 'country', 'industry', 'source', 'budget', 'currency', 'deadline', 'status', 'posted', 'original_tender'];
+  const stamp = new Date().toISOString().slice(0, 10);
+  if (format === 'excel') {
+    const html = `<table><thead><tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join('')}</tr></thead><tbody>${rows.map((row) => `<tr>${headers.map((header) => `<td>${escapeHtml(row[header])}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    downloadTextFile(`skyproz-contracts-${stamp}.xls`, html, 'application/vnd.ms-excel;charset=utf-8');
+    return;
+  }
+  const csv = [headers.map(csvCell).join(','), ...rows.map((row) => headers.map((header) => csvCell(row[header])).join(','))].join('\n');
+  downloadTextFile(`skyproz-contracts-${stamp}.csv`, csv, 'text/csv;charset=utf-8');
+}
+
+function pageQuery(targetPage) {
+  const params = new URLSearchParams(location.search);
+  params.set('page', targetPage);
+  return params;
+}
+
+function bindServerSort(root, basePath) {
+  root.querySelectorAll('[data-sort-column]').forEach((header) => {
+    header.onclick = (event) => {
+      const column = header.dataset.sortColumn;
+      const params = new URLSearchParams(location.search);
+      const parts = String(params.get('sort') || '').split(',').map((part) => part.trim()).filter(Boolean);
+      const existing = parts.map((part) => part.split(':')).find(([key]) => key === column);
+      const nextDirection = existing?.[1] === 'asc' ? 'desc' : 'asc';
+      const nextPart = `${column}:${nextDirection}`;
+      const nextParts = event.shiftKey ? [nextPart, ...parts.filter((part) => !part.startsWith(`${column}:`))].slice(0, 4) : [nextPart];
+      params.set('sort', nextParts.join(','));
+      params.set('page', '1');
+      location.href = `${basePath}?${params}`;
+    };
+  });
+}
+
 function dashboardNav() {
   return `<nav class="dashboard-nav" aria-label="Contract Finder dashboard">
     ${button('Overview','/contract-finder/dashboard','button-ghost')}
+    ${button('Contracts','/contract-finder/contracts','button-ghost')}
     ${button('Favorites','/contract-finder/favorites','button-ghost')}
     ${button('Saved Searches','/contract-finder/saved-searches','button-ghost')}
     ${button('Alerts','/contract-finder/alerts','button-ghost')}
@@ -241,10 +311,11 @@ function filterForm(options, params) {
     <div class="field-row"><div class="field"><label>Deadline after</label><input type="date" name="deadline_after" value="${escapeHtml(params.get('deadline_after') || '')}"></div><div class="field"><label>Deadline before</label><input type="date" name="deadline_before" value="${escapeHtml(params.get('deadline_before') || '')}"></div></div>
     <div class="field-row"><div class="field"><label>Posted after</label><input type="date" name="posted_after" value="${escapeHtml(params.get('posted_after') || '')}"></div><div class="field"><label>Posted before</label><input type="date" name="posted_before" value="${escapeHtml(params.get('posted_before') || '')}"></div></div>
     <div class="field"><label>Contract type</label><select name="contract_type"><option value="">All</option>${selectOptions(options.contract_types || [], params.get('contract_type'))}</select></div>
+    <div class="field"><label>Status</label><select name="status"><option value="">All</option>${selectOptions(options.statuses || [], params.get('status'))}</select></div>
     <div class="field"><label>Government or Private</label><select name="buyer_type"><option value="">Government & private</option>${option('government', params.get('buyer_type'), 'Government')}${option('private', params.get('buyer_type'), 'Private')}</select></div>
     <div class="field"><label>Remote or Onsite</label><select name="work_mode"><option value="">Remote & onsite</option>${option('remote', params.get('work_mode'), 'Remote')}${option('onsite', params.get('work_mode'), 'Onsite')}${option('hybrid', params.get('work_mode'), 'Hybrid')}</select></div>
     <div class="field"><label>Minimum score</label><input type="number" name="min_score" min="0" max="100" value="${escapeHtml(params.get('min_score') || '')}" placeholder="0 - 100"></div>
-    <div class="field"><label>Sort</label><select name="sort">${option('newest', params.get('sort') || 'newest', 'Newest')}${option('deadline', params.get('sort'), 'Deadline')}${option('budget_high', params.get('sort'), 'Budget high')}${option('budget_low', params.get('sort'), 'Budget low')}</select></div>
+    <div class="field"><label>Sort</label><select name="sort">${option('newest', params.get('sort') || 'newest', 'Newest')}${option('deadline', params.get('sort'), 'Deadline')}${option('budget_high', params.get('sort'), 'Budget high')}${option('budget_low', params.get('sort'), 'Budget low')}${option('score:desc', params.get('sort'), 'AI score high')}${option('title:asc', params.get('sort'), 'Title A-Z')}${option('posted:desc', params.get('sort'), 'Posted newest')}</select></div>
     <button class="button button-gold" type="submit">Apply filters</button>
   </form>`;
 }
@@ -319,17 +390,152 @@ async function renderSearch() {
   };
 }
 
+async function renderContracts() {
+  const params = new URLSearchParams(location.search);
+  if (!params.get('page_size')) params.set('page_size','100');
+  const basePath = '/contract-finder/contracts';
+  const apiParams = new URLSearchParams(params);
+  apiParams.set('view', 'contracts');
+  const [results, options] = await Promise.all([api(`/contracts?${apiParams}`), api('/filter-options')]);
+  const quickChips = [
+    ['Rope access', 'keyword', 'rope access'],
+    ['High score', 'min_score', '80'],
+    ['Open only', 'status', 'open'],
+    ['Deadline first', 'sort', 'deadline:asc'],
+    ['Highest budget', 'sort', 'budget:desc']
+  ];
+  app.innerHTML = `<section class="page dense-page contracts-only-page">
+    <div class="section-heading dense-heading">
+      <div><p class="eyebrow">Contracts database</p><h1>Contracts</h1></div>
+      <p>Contracts-only workspace optimized for large datasets with server-side filtering, 100-row pages, sticky controls and compact rows.</p>
+    </div>
+    <div class="dense-toolbar sticky-toolbar">
+      <form id="quick-search" class="dense-search"><input name="keyword" value="${escapeHtml(params.get('keyword') || '')}" placeholder="Search all contracts, buyers, sources..."><button class="button button-gold">Search</button></form>
+      <div class="toolbar">
+        <span class="chip">${results.pagination.total} total contracts</span>
+        <label class="compact-select">Rows <select id="page-size">${[25,50,100].map((size)=>option(String(size), params.get('page_size'), String(size))).join('')}</select></label>
+        ${savedViewSelector()}
+        <button class="button button-ghost" id="save-view" type="button">Save filter</button>
+        <button class="button button-ghost" id="export-csv" type="button">Export CSV</button>
+        <button class="button button-ghost" id="export-excel" type="button">Export Excel</button>
+        ${columnSelector(contractColumns, 'contracts-page')}
+      </div>
+      <div class="chip-row quick-filters">${quickChips.map(([label, key, value]) => {
+        const query = new URLSearchParams(params); query.set(key, value); query.set('page', '1');
+        return `<a class="chip ${params.get(key) === value ? 'chip-gold' : ''}" href="${basePath}?${query}">${escapeHtml(label)}</a>`;
+      }).join('')}</div>
+    </div>
+    <details class="filter-drawer">
+      <summary class="button button-outline">Advanced filters</summary>
+      ${filterForm(options, params)}
+    </details>
+    <div class="bulk-toolbar sticky-filters">
+      <span data-bulk-count>0 selected</span>
+      <div class="toolbar">
+        <button class="button button-ghost" id="bulk-open" type="button">Open first</button>
+        <button class="button button-ghost" id="bulk-save" type="button">Save selected</button>
+        <span class="chip">Server sorted: ${escapeHtml(params.get('sort') || 'newest')}</span>
+      </div>
+    </div>
+    ${contractDataTable(results.items)}
+    <div class="pagination sticky-pagination">
+      <button class="button button-ghost" id="prev" ${results.pagination.page <= 1 ? 'disabled' : ''}>Previous</button>
+      <span class="button button-ghost">Page ${results.pagination.page} of ${results.pagination.pages}</span>
+      <button class="button button-ghost" id="next" ${results.pagination.page >= results.pagination.pages ? 'disabled' : ''}>Next</button>
+    </div>
+  </section>`;
+  bindDenseTableControls(app);
+  bindServerSort(app, basePath);
+  document.querySelector('#quick-search').addEventListener('submit',(event) => {
+    event.preventDefault();
+    const query = new URLSearchParams(location.search);
+    query.set('keyword', new FormData(event.currentTarget).get('keyword') || '');
+    query.set('page','1');
+    location.href = `${basePath}?${query}`;
+  });
+  document.querySelector('#filters').addEventListener('submit',(event) => {
+    event.preventDefault();
+    const query = new URLSearchParams(new FormData(event.currentTarget));
+    query.set('page_size', params.get('page_size') || '100');
+    query.set('page','1');
+    location.href = `${basePath}?${query}`;
+  });
+  document.querySelector('#page-size').onchange = (event) => {
+    const query = pageQuery('1');
+    query.set('page_size', event.target.value);
+    location.href = `${basePath}?${query}`;
+  };
+  document.querySelector('#saved-view').onchange = (event) => { if (event.target.value) location.href = `${basePath}?${event.target.value}`; };
+  document.querySelector('#save-view').onclick = () => { const name = prompt('Name this contract filter'); if (!name) return; saveCurrentView(name, params); toast('Filter saved on this browser'); };
+  document.querySelector('#export-csv').onclick = () => exportContracts(results.items, 'csv');
+  document.querySelector('#export-excel').onclick = () => exportContracts(results.items, 'excel');
+  document.querySelector('#prev').onclick = () => { location.href = `${basePath}?${pageQuery(results.pagination.page - 1)}`; };
+  document.querySelector('#next').onclick = () => { location.href = `${basePath}?${pageQuery(results.pagination.page + 1)}`; };
+  document.querySelector('#bulk-open').onclick = () => {
+    const first = document.querySelector('[data-row-select]:checked')?.closest('tr')?.dataset.contractLink;
+    if (first) location.href = `${basePath}/${encodeURIComponent(first)}`; else toast('Select at least one contract', true);
+  };
+  document.querySelector('#bulk-save').onclick = async () => {
+    if (!currentUser) return location.href='/contract-finder/login';
+    const ids = selectedContractIds(app);
+    if (!ids.length) return toast('Select contracts first', true);
+    try {
+      for (const id of ids) await api(`/contracts/${id}/favorite`,{method:'POST',body:'{}'});
+      toast(`${ids.length} contract(s) saved`);
+    } catch(error) { toast(error.message,true); }
+  };
+}
+
 function setPage(value) { const params = new URLSearchParams(location.search); params.set('page',value); location.search=params; }
+
+function listFromValue(value) {
+  if (Array.isArray(value)) return value.map((item) => String(item || '').trim()).filter(Boolean);
+  if (value && typeof value === 'object') return Object.entries(value).map(([key, item]) => `${key}: ${item}`).filter(Boolean);
+  if (typeof value === 'string') return value.split(/\n|;|\|/).map((item) => item.trim()).filter(Boolean);
+  return [];
+}
+
+function firstList(values = []) {
+  for (const value of values) {
+    const list = listFromValue(value);
+    if (list.length) return list;
+  }
+  return [];
+}
+
+function listPanel(title, items, fallback = 'Not stated in imported notice. Verify the original tender.') {
+  const list = items.length ? items : [fallback];
+  return `<section class="info-panel contract-intel-card">
+    <h3>${escapeHtml(title)}</h3>
+    <ul class="mini-checklist">${list.slice(0, 10).map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
+  </section>`;
+}
+
+function contractRiskItems(contract) {
+  const items = [];
+  if (contract.country_risk) items.push(`Country risk: ${contract.country_risk}`);
+  if (contract.submission_urgency) items.push(`Submission urgency: ${contract.submission_urgency}`);
+  if (contract.recommended_action) items.push(`Recommended action: ${contract.recommended_action}`);
+  if (contract.deadline) items.push(`Deadline: ${date(contract.deadline)}`);
+  if (contract.budget_value) items.push(`Budget visibility: ${money(contract.budget_value, contract.currency)}`);
+  return items;
+}
 
 async function renderContract() {
   const { contract } = await api(`/contracts/${encodeURIComponent(identifier)}`);
   const tags = contract.tags.map((tag) => `<span class="chip">${escapeHtml(tag)}</span>`).join('');
   const score = Number(contract.opportunity_score || 0);
+  const metadata = contract.metadata || {};
+  const sourceName = contract.configured_source_name || contract.source_name || 'Source';
+  const aiSummary = contract.ai_summary || metadata.ai_summary || metadata.summary || contract.translated_description || '';
+  const requiredDocuments = firstList([metadata.required_documents, metadata.document_checklist, metadata.documents]);
+  const requiredCertifications = firstList([metadata.required_certifications, metadata.certifications, metadata.compliance_certifications]);
+  const submissionChecklist = firstList([contract.ai_checklist, metadata.submission_checklist, metadata.checklist]);
   const sourceButton = contract.source_url
     ? `<a class="button button-gold" href="${escapeHtml(contract.source_url)}" target="_blank" rel="noopener noreferrer">Open Original Tender</a>`
     : '<button class="button button-gold" type="button" disabled>Original Tender Unavailable</button>';
   app.innerHTML = `<section class="page detail-hero">
-    <p class="eyebrow">${escapeHtml(contract.source_name)}</p>
+    <p class="eyebrow">${escapeHtml(sourceName)}</p>
     <h1>${escapeHtml(contract.title)}</h1>
     <div class="chip-row"><span class="status ${escapeHtml(contract.status)}">${escapeHtml(statusText(contract.status))}</span>${contract.verified?'<span class="verified">Verified</span>':''}<span class="chip">${escapeHtml(contract.country)}</span><span class="chip">${escapeHtml(contract.industry)}</span>${contract.ai_category ? `<span class="chip chip-gold">${escapeHtml(contract.ai_category)}</span>` : ''}${tags}</div>
   </section>
@@ -337,6 +543,16 @@ async function renderContract() {
     <div>
       <h2>Contract Overview</h2>
       <div class="prose">${escapeHtml(contract.description)}</div>
+      <div class="contract-intel-grid">
+        <section class="info-panel contract-intel-card ai-summary-card">
+          <h3>AI Summary</h3>
+          <p>${escapeHtml(aiSummary || 'AI summary is not available yet. Use the assistant below to generate one after login.')}</p>
+        </section>
+        ${listPanel('Required Documents', requiredDocuments)}
+        ${listPanel('Required Certifications', requiredCertifications)}
+        ${listPanel('Risk Analysis', contractRiskItems(contract))}
+        ${listPanel('Submission Checklist', submissionChecklist)}
+      </div>
       <section class="ai-panel">
         <p class="eyebrow">Premium intelligence</p>
         <h2>AI Contract Assistant</h2>
@@ -366,6 +582,7 @@ async function renderContract() {
           <div><dt>Budget</dt><dd>${money(contract.budget_value,contract.currency)}</dd></div>
           <div><dt>Deadline</dt><dd>${date(contract.deadline)}</dd></div>
           <div><dt>Posted</dt><dd>${date(contract.posted_date)}</dd></div>
+          <div><dt>Source</dt><dd>${escapeHtml(sourceName)}</dd></div>
           <div><dt>Contract type</dt><dd>${escapeHtml(contract.contract_type)}</dd></div>
           <div><dt>Buyer</dt><dd>${escapeHtml(contract.buyer_name || contract.buyer_type)}</dd></div>
           <div><dt>Region</dt><dd>${escapeHtml(contract.region || 'Not stated')}</dd></div>
@@ -1069,7 +1286,7 @@ async function init() {
   try { currentUser=(await api('/auth/me')).user; } catch { currentUser=null; }
   document.querySelector('#account-nav').innerHTML=currentUser?`<a class="account-link" href="/contract-finder/dashboard"><span class="account-dot"></span>${escapeHtml(currentUser.display_name)}</a>`:`<a class="button button-ghost" href="/contract-finder/login">Sign in</a>`;
   const menu=document.querySelector('.menu-toggle');menu.onclick=()=>{const nav=document.querySelector('.nav-links');const open=nav.classList.toggle('open');menu.setAttribute('aria-expanded',String(open));};
-  const routes={home:renderHome,search:renderSearch,contract:renderContract,dashboard:renderDashboard,favorites:renderFavorites,saved:renderSaved,alerts:renderAlerts,watchlists:renderWatchlists,admin:renderAdmin,connectors:renderConnectorManager,sourceDiscovery:renderSourceDiscovery,connectorWizard:renderConnectorWizard,marketplace:renderMarketplace,login:renderLogin,'not-found':renderNotFound};
+  const routes={home:renderHome,search:renderSearch,contracts:renderContracts,contract:renderContract,dashboard:renderDashboard,favorites:renderFavorites,saved:renderSaved,alerts:renderAlerts,watchlists:renderWatchlists,admin:renderAdmin,connectors:renderConnectorManager,sourceDiscovery:renderSourceDiscovery,connectorWizard:renderConnectorWizard,marketplace:renderMarketplace,login:renderLogin,'not-found':renderNotFound};
   try { await (routes[page]||renderNotFound)(); } catch(error){ console.error(error); app.innerHTML=`<section class="page"><div class="empty error"><h2>Unable to load this page</h2><p>${escapeHtml(error.message)}</p></div></section>`; }
 }
 

@@ -99,8 +99,10 @@ export async function handleApi(request, response, url) {
     }
     if (request.method === 'GET' && pathname === '/api/contract-finder/contracts') {
       const user = currentUser(request); const filters = queryObject(searchParams);
+      const contractsTableView = filters.view === 'contracts';
+      delete filters.view;
       const advanced = ['source_id', 'source_name', 'verified', 'category', 'ai_category', 'region', 'buyer', 'posted_before', 'posted_after', 'min_score', 'sort'].some((key) => filters[key] && !['newest', 'deadline'].includes(filters[key]));
-      if (advanced && user?.plan !== 'premium' && user?.role !== 'admin') throw Object.assign(new Error('Advanced filters require premium'), { status: 403, code: 'PREMIUM_REQUIRED' });
+      if (advanced && !contractsTableView && user?.plan !== 'premium' && user?.role !== 'admin') throw Object.assign(new Error('Advanced filters require premium'), { status: 403, code: 'PREMIUM_REQUIRED' });
       sendJson(response, 200, searchContracts(filters, user?.id), { 'cache-control': user ? 'private, max-age=30' : 'public, max-age=60' }); return true;
     }
     let route = match(pathname, /^\/api\/contract-finder\/contracts\/([^/]+)$/);

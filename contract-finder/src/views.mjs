@@ -4,6 +4,7 @@ import { escapeHtml } from './utils.mjs';
 const pageMeta = {
   home: ['Contract Finder | Skyproz Services', 'Discover verified contract and tender opportunities across industries and countries.'],
   search: ['Search Contracts & Tenders | Skyproz', 'Filter contract opportunities by country, industry, budget, deadline and work mode.'],
+  contracts: ['Contracts Database | Skyproz', 'Search, filter, sort and export Skyproz contract opportunities.'],
   dashboard: ['Contract Dashboard | Skyproz', 'Track saved contracts, deadlines, searches and alerts.'],
   favorites: ['Favorite Contracts | Skyproz', 'Review and track your saved contract opportunities.'],
   saved: ['Saved Searches | Skyproz', 'Manage saved contract searches and alerts.'],
@@ -55,7 +56,7 @@ export function renderShell({ page = 'home', identifier = '', contract = null } 
     <a class="brand" href="/"><span class="brand-mark">S</span><span><strong>SKYPROZ</strong><small>SERVICES</small></span></a>
     <button class="menu-toggle" type="button" aria-expanded="false">Menu</button>
     <nav class="nav-links">
-      <a href="/">Company Site</a><a href="/contract-finder/">Contract Finder</a><a href="/contract-finder/search">Search</a><a href="/contract-finder/dashboard">Dashboard</a>
+      <a href="/">Company Site</a><a href="/contract-finder/">Contract Finder</a><a href="/contract-finder/contracts">Contracts</a><a href="/contract-finder/search">Search</a><a href="/contract-finder/dashboard">Dashboard</a>
     </nav>
     <div id="account-nav"></div>
   </header>
