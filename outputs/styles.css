@@ -317,6 +317,58 @@ img { max-width: 100%; display: block; }
   text-transform: uppercase;
 }
 
+.worker-recruitment {
+  padding-top: 0;
+}
+.worker-recruitment-card {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  gap: 18px;
+  padding: clamp(28px, 5vw, 54px);
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 24px;
+  background: linear-gradient(135deg, rgba(7, 16, 30, .9), rgba(10, 31, 54, .76));
+  box-shadow: var(--shadow);
+}
+.worker-recruitment-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 82% 18%, rgba(255, 122, 26, .18), transparent 34%);
+  pointer-events: none;
+}
+.worker-recruitment-card > * {
+  position: relative;
+  z-index: 1;
+}
+.worker-recruitment-card h2 {
+  max-width: 860px;
+  margin: 0;
+  font-family: "Barlow Condensed", sans-serif;
+  font-size: clamp(2.6rem, 5vw, 5rem);
+  line-height: .9;
+  text-transform: uppercase;
+}
+.worker-recruitment-card p:not(.eyebrow) {
+  max-width: 920px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+.worker-recruitment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+.worker-login-note {
+  margin: 0;
+  font-size: .9rem;
+}
+.worker-login-note a {
+  color: var(--gold);
+  font-weight: 800;
+}
 .dashboard-wrap { perspective: 1400px; }
 .dashboard-card {
   position: relative;

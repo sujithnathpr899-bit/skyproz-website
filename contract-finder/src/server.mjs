@@ -75,6 +75,10 @@ export const server = createServer(async (request, response) => {
     if (url.pathname === '/contract-finder/robots.txt') {
       sendBody(response, 200, `User-agent: *\nAllow: /contract-finder/\nSitemap: ${config.appOrigin}/contract-finder/sitemap.xml\n`, { 'content-type': 'text/plain; charset=utf-8' }, request); return;
     }
+    if (url.pathname === '/contact' || url.pathname === '/contact/') {
+      response.writeHead(302, withSecurityHeaders({ location: '/#contact' }));
+      response.end(); return;
+    }
     if (!url.pathname.startsWith('/contract-finder') && !url.pathname.startsWith('/workers') && serveCompanySite(request, response, url.pathname)) return;
     if (url.pathname === '/') { response.writeHead(302, withSecurityHeaders({ location: '/contract-finder/' })); response.end(); return; }
     const workerJob = url.pathname.match(/^\/workers\/jobs\/([^/]+)$/);
