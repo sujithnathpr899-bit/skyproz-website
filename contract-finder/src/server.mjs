@@ -88,7 +88,9 @@ export const server = createServer(async (request, response) => {
     const workerPages = new Map([
       ['/workers', 'opportunities'], ['/workers/', 'opportunities'], ['/workers/opportunities', 'opportunities'],
       ['/workers/login', 'login'], ['/workers/signup', 'signup'], ['/workers/dashboard', 'dashboard'],
-      ['/workers/profile', 'profile'], ['/workers/admin', 'admin']
+      ['/workers/profile', 'profile'], ['/workers/certifications', 'certifications'], ['/workers/documents', 'documents'],
+      ['/workers/applications', 'applications'], ['/workers/saved-jobs', 'savedJobs'], ['/workers/notifications', 'notifications'],
+      ['/workers/settings', 'settings'], ['/workers/admin', 'admin']
     ]);
     const workerPage = workerPages.get(url.pathname);
     if (workerPage) return sendHtml(response, 200, renderWorkerShell({ page: workerPage }), {}, request);

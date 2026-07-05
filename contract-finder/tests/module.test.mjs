@@ -1,4 +1,4 @@
-﻿import assert from 'node:assert/strict';
+import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
@@ -20,15 +20,24 @@ const { connectorExpansionTemplates } = await import('../src/connectors/template
 const privateRssConnector = (await import('../src/connectors/private-rss.mjs')).default;
 const { buildPortalOpportunity } = await import('../src/connectors/enterprise-portal.mjs');
 const {
+  addWorkerExperience,
   adminUpdateDocument,
   adminUpdateWorker,
   applyToJob,
   authenticateWorker,
   createWorker,
   createWorkerJob,
+  getWorkerDocumentDownload,
+  listSavedJobs,
+  listWorkerApplications,
+  listWorkerExperience,
+  listWorkerNotifications,
+  markWorkerNotification,
+  replaceWorkerDocument,
   saveJob,
   searchJobs,
   updateWorkerProfile,
+  updateWorkerSettings,
   uploadWorkerDocument,
   workerDashboard
 } = await import('../src/workers.mjs');
@@ -162,8 +171,23 @@ test('worker portal supports registration, jobs, applications and documents', as
   assert.ok(worker.id);
   const authenticated = await authenticateWorker('anoop.worker@example.com', 'Worker-Password-2026!');
   assert.equal(authenticated.id, worker.id);
-  const updated = updateWorkerProfile(worker.id, { availability: 'available in 30 days', preferred_countries: ['UAE', 'Qatar'], preferred_salary: 'USD 2800' });
+  const updated = updateWorkerProfile(worker.id, {
+    availability: 'Available in 2 Weeks',
+    preferred_countries: ['UAE', 'Qatar'],
+    preferred_salary: 'USD 2800',
+    professional_title: 'IRATA Rope Access Painter',
+    languages: ['English', 'Hindi'],
+    biography: 'Industrial rope access technician available for shutdown and offshore projects.',
+    emergency_contact_name: 'Emergency Contact',
+    emergency_contact_phone: '+919400000002',
+    emergency_contact_relationship: 'Brother'
+  });
   assert.ok(updated.profile_completion >= worker.profile_completion);
+  assert.equal(updated.professional_title, 'IRATA Rope Access Painter');
+  addWorkerExperience(worker.id, { company: 'Skyproz Yard', position: 'Rope Access Painter', country: 'India', start_date: '2022-01-01', end_date: '2025-12-31', description: 'Painting and inspection at height.' });
+  assert.equal(listWorkerExperience(worker.id).length, 1);
+  const settings = updateWorkerSettings(worker.id, { notification_settings: { email_alerts: true, application_updates: true }, privacy_settings: { profile_visible: true } });
+  assert.equal(settings.notification_settings.email_alerts, true);
 
   const job = createWorkerJob({
     title: 'Rope Access Painter',
@@ -184,6 +208,11 @@ test('worker portal supports registration, jobs, applications and documents', as
   assert.equal(jobs.items[0].id, job.id);
   saveJob(worker.id, job.id);
   applyToJob(worker.id, job.id, 'Ready for mobilisation.');
+  assert.equal(listSavedJobs(worker.id).length, 1);
+  assert.equal(listWorkerApplications(worker.id).length, 1);
+  const notifications = listWorkerNotifications(worker.id);
+  assert.ok(notifications.length >= 2);
+  assert.equal(markWorkerNotification(worker.id, notifications[0].id).is_read, true);
 
   const document = uploadWorkerDocument(worker.id, {
     document_type: 'CV / Resume',
@@ -192,13 +221,24 @@ test('worker portal supports registration, jobs, applications and documents', as
     content_base64: Buffer.from('%PDF-1.4 worker cv').toString('base64')
   });
   assert.equal(document.status, 'pending');
-  const approved = adminUpdateDocument(document.id, { status: 'approved', reviewer_note: 'Verified sample document' });
+  const download = getWorkerDocumentDownload(worker.id, document.id);
+  assert.ok(download.body.length > 0);
+  const replacement = replaceWorkerDocument(worker.id, document.id, {
+    document_type: 'CV / Resume',
+    document_name: 'Updated CV',
+    filename: 'anoop-cv-updated.pdf',
+    content_type: 'application/pdf',
+    content_base64: Buffer.from('%PDF-1.4 updated worker cv').toString('base64')
+  });
+  assert.equal(replacement.document_name, 'Updated CV');
+  const approved = adminUpdateDocument(replacement.id, { status: 'approved', reviewer_note: 'Verified sample document' });
   assert.equal(approved.status, 'approved');
   assert.equal(adminUpdateWorker(worker.id, { profile_verified: true }).profile_verified, true);
   const dashboard = workerDashboard(worker.id);
   assert.equal(dashboard.counts.saved_jobs, 1);
   assert.equal(dashboard.counts.applied_jobs, 1);
-  assert.equal(dashboard.counts.uploaded_documents, 1);
+  assert.ok(dashboard.counts.uploaded_documents >= 1);
+  assert.ok(dashboard.worker.verification_badges.some((badge) => badge.label === 'Verified Documents' && badge.verified));
 });
 test('connector manager tests, imports and logs a live RSS source', async () => {
   const rss = `<?xml version="1.0" encoding="UTF-8"?>

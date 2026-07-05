@@ -2,20 +2,25 @@
 import { escapeHtml } from './utils.mjs';
 
 const pages = {
-  opportunities: ['Worker Opportunities | Skyproz Services', 'Find worldwide industrial jobs for rope access, offshore, wind, mechanical, electrical and specialist trades.'],
-  login: ['Worker Login | Skyproz Services', 'Sign in to your Skyproz worker dashboard.'],
-  signup: ['Join Our Workforce | Skyproz Services', 'Create your professional worker profile and connect with employers worldwide.'],
-  dashboard: ['Worker Dashboard | Skyproz Services', 'Manage your profile, applications, documents and messages.'],
-  profile: ['Worker Profile | Skyproz Services', 'Update worker skills, experience, certifications and preferred countries.'],
-  job: ['Job Details | Skyproz Services', 'Review worker opportunity details and apply.'],
-  admin: ['Worker Admin | Skyproz Services', 'Admin tools for worker verification, documents and exports.'],
-  notFound: ['Worker Page Not Found | Skyproz Services', 'The requested worker portal page was not found.']
+  opportunities: ['Worker Opportunities | Skyproz Services', 'Find worldwide industrial jobs for rope access, offshore, wind, mechanical, electrical and specialist trades.', '/workers'],
+  login: ['Worker Login | Skyproz Services', 'Sign in to your Skyproz worker dashboard.', '/workers/login'],
+  signup: ['Join Our Workforce | Skyproz Services', 'Create your professional worker profile and connect with employers worldwide.', '/workers/signup'],
+  dashboard: ['Worker Dashboard | Skyproz Services', 'Manage your profile, applications, documents and messages.', '/workers/dashboard'],
+  profile: ['Worker Profile | Skyproz Services', 'Update worker skills, experience, certifications and preferred countries.', '/workers/profile'],
+  certifications: ['Worker Certifications | Skyproz Services', 'Upload and manage worker certificates for Skyproz verification.', '/workers/certifications'],
+  documents: ['Worker Documents | Skyproz Services', 'Manage worker CV, passport, certificates, medical and experience documents.', '/workers/documents'],
+  applications: ['Worker Applications | Skyproz Services', 'Track submitted job applications and interview invitations.', '/workers/applications'],
+  savedJobs: ['Saved Jobs | Skyproz Services', 'Review saved worker opportunities and apply when ready.', '/workers/saved-jobs'],
+  notifications: ['Worker Notifications | Skyproz Services', 'View worker messages, alerts and profile updates.', '/workers/notifications'],
+  settings: ['Worker Settings | Skyproz Services', 'Manage worker account preferences, notifications and privacy.', '/workers/settings'],
+  job: ['Job Details | Skyproz Services', 'Review worker opportunity details and apply.', '/workers/jobs'],
+  admin: ['Worker Admin | Skyproz Services', 'Admin tools for worker verification, documents and exports.', '/workers/admin'],
+  notFound: ['Worker Page Not Found | Skyproz Services', 'The requested worker portal page was not found.', '/workers']
 };
 
 export function renderWorkerShell({ page = 'opportunities', identifier = '' } = {}) {
-  const [title, description] = pages[page] || pages.notFound;
-  const canonicalPath = page === 'opportunities' ? '/workers' : `/workers/${page}`;
-  const canonical = `${config.appOrigin}${canonicalPath}`;
+  const [title, description, canonicalPath] = pages[page] || pages.notFound;
+  const canonical = `${config.appOrigin}${page === 'job' && identifier ? `${canonicalPath}/${encodeURIComponent(identifier)}` : canonicalPath}`;
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
