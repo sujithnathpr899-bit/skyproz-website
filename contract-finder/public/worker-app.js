@@ -59,6 +59,43 @@ function workerNavState() {
   });
 }
 
+function renderWorkerAccountNavigation() {
+  const account = document.querySelector('[data-worker-account]');
+  if (!account) return;
+  if (!currentWorker) {
+    account.innerHTML = '<a class="button button-gold worker-account-cta" href="/workers/signup">Join Our Workforce</a>';
+    return;
+  }
+  const name = escapeHtml(currentWorker.full_name || 'My Dashboard');
+  account.innerHTML = `<div class="worker-account-dropdown">
+    <button class="button button-gold worker-account-toggle" type="button" aria-expanded="false">My Dashboard</button>
+    <div class="worker-account-menu" role="menu" aria-label="Worker account menu">
+      <a href="/workers/dashboard" role="menuitem">Dashboard</a>
+      <a href="/workers/profile" role="menuitem">My Profile</a>
+      <a href="/workers/dashboard#applications" role="menuitem">My Applications</a>
+      <a href="/workers/dashboard#saved-jobs" role="menuitem">Saved Jobs</a>
+      <a href="/workers/dashboard#messages" role="menuitem">Messages</a>
+      <button type="button" data-worker-logout role="menuitem">Logout</button>
+    </div>
+    <span class="worker-account-name">${name}</span>
+  </div>`;
+  const dropdown = account.querySelector('.worker-account-dropdown');
+  const toggle = account.querySelector('.worker-account-toggle');
+  toggle?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const open = dropdown.classList.toggle('is-open');
+    toggle.setAttribute('aria-expanded', String(open));
+  });
+  document.addEventListener('click', () => {
+    dropdown?.classList.remove('is-open');
+    toggle?.setAttribute('aria-expanded', 'false');
+  });
+  account.querySelector('[data-worker-logout]')?.addEventListener('click', async () => {
+    await api('/auth/logout', { method: 'POST', body: '{}' });
+    location.href = '/workers/login';
+  });
+}
+
 function jobCard(job) {
   return `<article class="job-card">
     <div class="job-card-top"><span class="status">${escapeHtml(job.status)}</span><span>${dateText(job.posted_at)}</span></div>
@@ -98,7 +135,35 @@ async function renderOpportunities() {
 
 async function renderSignup() {
   options = await api('/options');
-  app.innerHTML = `<section class="auth-layout"><form id="signup-form" class="glass-panel auth-card"><p class="eyebrow">Worker registration</p><h1>Create Worker Profile</h1><div class="form-grid">${field('full_name','Full Name','','text','required')}${field('mobile_number','Mobile Number','','tel','required')}${field('email','Email','','email','required')}${field('country','Country','','text','required')}${field('nationality','Nationality','','text','required')}${field('current_location','Current Location','','text','required')}${field('date_of_birth','Date of Birth','','date','required')}${field('passport_number','Passport Number (optional)')}${field('trade_profession','Trade / Profession','','text','required')}${field('years_experience','Years of Experience','0','number','min="0" required')}${field('highest_qualification','Highest Qualification','','text','required')}${field('preferred_salary','Preferred Salary')}${field('password','Password','','password','minlength="10" required')}${field('confirm_password','Confirm Password','','password','minlength="10" required')}</div><div class="field"><label>Skills</label>${skillChecks()}</div><button class="button button-gold">Create Account</button><p class="helper">Already registered? <a href="/workers/login">Worker Login</a></p></form></section>`;
+  app.innerHTML = `<section class="auth-layout signup-page">
+    <div class="signup-shell">
+      <header class="signup-intro">
+        <p class="eyebrow">Worker registration</p>
+        <h1>Join Our Workforce</h1>
+        <p>Create your professional worker profile and connect with employers worldwide.</p>
+        <div class="signup-steps" aria-label="Worker signup steps">
+          <span><strong>1</strong>Create an account</span>
+          <span><strong>2</strong>Log in anytime</span>
+          <span><strong>3</strong>Browse available jobs</span>
+          <span><strong>4</strong>Access your dashboard</span>
+        </div>
+      </header>
+      <form id="signup-form" class="glass-panel auth-card wide">
+        <h2>Worker Registration Form</h2>
+        <div class="form-grid">${field('full_name','Full Name','','text','required')}${field('mobile_number','Mobile Number','','tel','required')}${field('email','Email','','email','required')}${field('country','Country','','text','required')}${field('nationality','Nationality','','text','required')}${field('current_location','Current Location','','text','required')}${field('date_of_birth','Date of Birth','','date','required')}${field('passport_number','Passport Number (optional)')}${field('trade_profession','Trade / Profession','','text','required')}${field('years_experience','Years of Experience','0','number','min="0" required')}${field('highest_qualification','Highest Qualification','','text','required')}${field('preferred_salary','Preferred Salary')}${field('password','Password','','password','minlength="10" required')}${field('confirm_password','Confirm Password','','password','minlength="10" required')}</div>
+        <div class="field"><label>Skills</label>${skillChecks()}</div>
+        <button class="button button-gold">Create Account</button>
+      </form>
+      <section class="glass-panel signup-quick-links" aria-labelledby="worker-quick-links-title">
+        <p class="eyebrow">Quick Links</p>
+        <h2 id="worker-quick-links-title">Need another path?</h2>
+        <div class="quick-link-grid">
+          <a class="quick-link-card" href="/workers/login"><span>Already have an account?</span><strong>Worker Login</strong></a>
+          <a class="quick-link-card" href="/workers/opportunities"><span>Looking for available jobs?</span><strong>Browse Available Jobs</strong></a>
+        </div>
+      </section>
+    </div>
+  </section>`;
   document.querySelector('#signup-form').onsubmit = async (event) => { event.preventDefault(); try { await api('/auth/register', { method: 'POST', body: JSON.stringify(collectForm(event.currentTarget)) }); location.href = '/workers/dashboard'; } catch (error) { toast(error.message, true); } };
 }
 
@@ -118,7 +183,7 @@ async function fileToBase64(file) {
 async function renderDashboard() {
   if (!requireWorkerPage()) return;
   const data = await api('/dashboard');
-  app.innerHTML = `<section class="page-section dashboard-page"><div class="section-heading"><div><p class="eyebrow">My Dashboard</p><h1>Welcome, ${escapeHtml(data.worker.full_name)}</h1></div><div class="toolbar">${button('Edit Profile','/workers/profile','button-gold')}<button class="button button-outline" id="logout">Logout</button></div></div><div class="metric-grid"><div class="metric"><strong>${data.worker.profile_completion}%</strong><span>Profile Completion</span></div><div class="metric"><strong>${data.counts.saved_jobs}</strong><span>Saved Jobs</span></div><div class="metric"><strong>${data.counts.applied_jobs}</strong><span>Applied Jobs</span></div><div class="metric"><strong>${data.counts.interview_invitations}</strong><span>Interview Invitations</span></div><div class="metric"><strong>${data.counts.messages}</strong><span>Messages</span></div><div class="metric"><strong>${data.counts.notifications}</strong><span>Notifications</span></div></div><div class="dashboard-grid"><section class="glass-panel"><h2>Uploaded Documents</h2><div class="table-wrap"><table><thead><tr><th>Type</th><th>File</th><th>Size</th><th>Status</th><th>Uploaded</th></tr></thead><tbody>${documentRows(data.documents)}</tbody></table></div></section><form id="document-form" class="glass-panel"><h2>Upload Certificate</h2><div class="field"><label>Document Type</label><select name="document_type" required>${options.document_types.map((type) => option(type)).join('')}</select></div><div class="field"><label>File</label><input name="file" type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" required></div><button class="button button-gold">Upload Document</button><p class="helper">PDF, DOC, DOCX, JPG or PNG. Max 5 MB.</p></form><section class="glass-panel"><h2>Applications</h2><div class="list">${data.applications.map((item) => `<div class="list-item"><div><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.company)} | ${escapeHtml(item.country)}</span></div><span class="status">${escapeHtml(item.status)}</span></div>`).join('') || '<div class="empty compact">No applications yet.</div>'}</div></section><section class="glass-panel"><h2>Saved Jobs</h2><div class="list">${data.saved_jobs.map((job) => `<a class="list-item" href="/workers/jobs/${job.slug}"><div><strong>${escapeHtml(job.title)}</strong><span>${escapeHtml(job.company)} | ${escapeHtml(job.country)}</span></div><span>${escapeHtml(job.trade)}</span></a>`).join('') || '<div class="empty compact">No saved jobs yet.</div>'}</div></section></div></section>`;
+  app.innerHTML = `<section class="page-section dashboard-page"><div class="section-heading"><div><p class="eyebrow">My Dashboard</p><h1>Welcome, ${escapeHtml(data.worker.full_name)}</h1></div><div class="toolbar">${button('Edit Profile','/workers/profile','button-gold')}<button class="button button-outline" id="logout">Logout</button></div></div><div class="metric-grid"><div class="metric"><strong>${data.worker.profile_completion}%</strong><span>Profile Completion</span></div><div class="metric"><strong>${data.counts.saved_jobs}</strong><span>Saved Jobs</span></div><div class="metric"><strong>${data.counts.applied_jobs}</strong><span>Applied Jobs</span></div><div class="metric"><strong>${data.counts.interview_invitations}</strong><span>Interview Invitations</span></div><div class="metric" id="messages"><strong>${data.counts.messages}</strong><span>Messages</span></div><div class="metric"><strong>${data.counts.notifications}</strong><span>Notifications</span></div></div><div class="dashboard-grid"><section class="glass-panel"><h2>Uploaded Documents</h2><div class="table-wrap"><table><thead><tr><th>Type</th><th>File</th><th>Size</th><th>Status</th><th>Uploaded</th></tr></thead><tbody>${documentRows(data.documents)}</tbody></table></div></section><form id="document-form" class="glass-panel"><h2>Upload Certificate</h2><div class="field"><label>Document Type</label><select name="document_type" required>${options.document_types.map((type) => option(type)).join('')}</select></div><div class="field"><label>File</label><input name="file" type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" required></div><button class="button button-gold">Upload Document</button><p class="helper">PDF, DOC, DOCX, JPG or PNG. Max 5 MB.</p></form><section class="glass-panel" id="applications"><h2>Applications</h2><div class="list">${data.applications.map((item) => `<div class="list-item"><div><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.company)} | ${escapeHtml(item.country)}</span></div><span class="status">${escapeHtml(item.status)}</span></div>`).join('') || '<div class="empty compact">No applications yet.</div>'}</div></section><section class="glass-panel" id="saved-jobs"><h2>Saved Jobs</h2><div class="list">${data.saved_jobs.map((job) => `<a class="list-item" href="/workers/jobs/${job.slug}"><div><strong>${escapeHtml(job.title)}</strong><span>${escapeHtml(job.company)} | ${escapeHtml(job.country)}</span></div><span>${escapeHtml(job.trade)}</span></a>`).join('') || '<div class="empty compact">No saved jobs yet.</div>'}</div></section></div></section>`;
   document.querySelector('#logout').onclick = async () => { await api('/auth/logout', { method: 'POST', body: '{}' }); location.href = '/workers/login'; };
   document.querySelector('#document-form').onsubmit = async (event) => { event.preventDefault(); const form = event.currentTarget; const file = form.file.files[0]; try { await api('/documents', { method: 'POST', body: JSON.stringify({ document_type: form.document_type.value, filename: file.name, content_type: file.type, content_base64: await fileToBase64(file) }) }); toast('Document uploaded for review'); setTimeout(() => location.reload(), 500); } catch (error) { toast(error.message, true); } };
 }
@@ -149,6 +214,7 @@ function renderNotFound() { app.innerHTML = `<section class="page-section"><div 
 async function init() {
   workerNavState();
   try { currentWorker = (await api('/auth/me')).worker; } catch { currentWorker = null; }
+  renderWorkerAccountNavigation();
   try { options = await api('/options'); } catch { options = { skills: [], document_types: [] }; }
   const routes = { opportunities: renderOpportunities, login: renderLogin, signup: renderSignup, dashboard: renderDashboard, profile: renderProfile, job: renderJobDetail, admin: renderAdmin, notFound: renderNotFound };
   try { await (routes[page] || renderNotFound)(); } catch (error) { app.innerHTML = `<section class="page-section"><div class="empty error"><h1>Unable to load Worker Portal</h1><p>${escapeHtml(error.message)}</p></div></section>`; }

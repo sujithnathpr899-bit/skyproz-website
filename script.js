@@ -39,6 +39,71 @@ if (workerDropdown && workerDropdownToggle) {
     workerDropdownToggle.setAttribute("aria-expanded", "false");
   });
 }
+
+const workerAccount = document.querySelector("[data-worker-account]");
+const workerMenu = document.querySelector("[data-worker-menu]");
+
+function workerDashboardLinks(useButtons = false) {
+  const items = [
+    ["Dashboard", "/workers/dashboard"],
+    ["My Profile", "/workers/profile"],
+    ["My Applications", "/workers/dashboard#applications"],
+    ["Saved Jobs", "/workers/dashboard#saved-jobs"],
+    ["Messages", "/workers/dashboard#messages"]
+  ];
+  const links = items.map(([label, href]) => `<a href="${href}">${label}</a>`).join("");
+  const logout = useButtons ? '<button type="button" data-worker-logout>Logout</button>' : '<button type="button" data-worker-logout>Logout</button>';
+  return `${links}${logout}`;
+}
+
+function renderWorkerHeader(worker) {
+  if (workerAccount) {
+    if (worker) {
+      workerAccount.innerHTML = `<div class="worker-account-dropdown">
+        <button class="button button-small button-gold worker-account-toggle" type="button" aria-expanded="false">My Dashboard</button>
+        <div class="worker-account-menu" role="menu" aria-label="Worker account menu">${workerDashboardLinks(true)}</div>
+      </div>`;
+      const dropdown = workerAccount.querySelector(".worker-account-dropdown");
+      const toggle = workerAccount.querySelector(".worker-account-toggle");
+      toggle?.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const isOpen = dropdown.classList.toggle("is-open");
+        toggle.setAttribute("aria-expanded", String(isOpen));
+      });
+      document.addEventListener("click", () => {
+        dropdown?.classList.remove("is-open");
+        toggle?.setAttribute("aria-expanded", "false");
+      });
+    } else {
+      workerAccount.innerHTML = '<a class="button button-small button-gold" href="/workers/signup">Join Our Workforce</a>';
+    }
+  }
+
+  if (workerMenu) {
+    workerMenu.innerHTML = worker
+      ? workerDashboardLinks(true)
+      : '<a href="/workers">Find Opportunities</a><a href="/workers/login">Worker Login</a><a href="/workers/signup">Worker Sign Up</a><a href="/workers/dashboard">My Dashboard</a>';
+  }
+
+  document.querySelectorAll("[data-worker-logout]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await fetch("/api/workers/auth/logout", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+      window.location.href = "/workers/login";
+    });
+  });
+}
+
+async function initWorkerHeader() {
+  try {
+    const response = await fetch("/api/workers/auth/me", { headers: { accept: "application/json" } });
+    const payload = response.ok ? await response.json() : { worker: null };
+    renderWorkerHeader(payload.worker);
+  } catch {
+    renderWorkerHeader(null);
+  }
+}
+
+initWorkerHeader();
 function updateHeader() {
   if (!header) return;
   header.classList.toggle("is-scrolled", window.scrollY > 18);

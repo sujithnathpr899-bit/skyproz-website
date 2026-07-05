@@ -4,7 +4,7 @@ import { escapeHtml } from './utils.mjs';
 const pages = {
   opportunities: ['Worker Opportunities | Skyproz Services', 'Find worldwide industrial jobs for rope access, offshore, wind, mechanical, electrical and specialist trades.'],
   login: ['Worker Login | Skyproz Services', 'Sign in to your Skyproz worker dashboard.'],
-  signup: ['Worker Sign Up | Skyproz Services', 'Create a Skyproz worker profile and apply for global industrial opportunities.'],
+  signup: ['Join Our Workforce | Skyproz Services', 'Create your professional worker profile and connect with employers worldwide.'],
   dashboard: ['Worker Dashboard | Skyproz Services', 'Manage your profile, applications, documents and messages.'],
   profile: ['Worker Profile | Skyproz Services', 'Update worker skills, experience, certifications and preferred countries.'],
   job: ['Job Details | Skyproz Services', 'Review worker opportunity details and apply.'],
@@ -47,9 +47,9 @@ export function renderWorkerShell({ page = 'opportunities', identifier = '' } = 
     <nav class="worker-nav" aria-label="Worker portal navigation">
       <a href="/">Company Site</a>
       <a href="/workers">Find Opportunities</a>
-      <a href="/workers/login">Worker Login</a>
-      <a href="/workers/signup">Worker Sign Up</a>
-      <a href="/workers/dashboard">My Dashboard</a>
+      <div class="worker-nav-account" data-worker-account>
+        <a class="button button-gold worker-account-cta" href="/workers/signup">Join Our Workforce</a>
+      </div>
     </nav>
   </header>
   <main id="worker-app" data-page="${escapeHtml(page)}" data-identifier="${escapeHtml(identifier)}">
