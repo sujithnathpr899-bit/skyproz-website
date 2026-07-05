@@ -238,7 +238,7 @@ test('worker portal supports registration, jobs, applications and documents', as
   assert.equal(dashboard.counts.saved_jobs, 1);
   assert.equal(dashboard.counts.applied_jobs, 1);
   assert.ok(dashboard.counts.uploaded_documents >= 1);
-  assert.ok(dashboard.worker.verification_badges.some((badge) => badge.label === 'Verified Documents' && badge.verified));
+  assert.ok(dashboard.worker.verification_badges.some((badge) => badge.label === 'Documents Verified' && badge.verified));
 });
 test('connector manager tests, imports and logs a live RSS source', async () => {
   const rss = `<?xml version="1.0" encoding="UTF-8"?>

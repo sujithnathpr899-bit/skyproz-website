@@ -1,4 +1,4 @@
-﻿import fs from 'node:fs';
+import fs from 'node:fs';
 import path from 'node:path';
 import { createServer } from 'node:http';
 import { config, rootDir, validateProductionConfig } from './config.mjs';
@@ -85,7 +85,10 @@ export const server = createServer(async (request, response) => {
     if (workerJob) {
       return sendHtml(response, 200, renderWorkerShell({ page: 'job', identifier: decodeURIComponent(workerJob[1]) }), { 'cache-control': 'public, max-age=60' }, request);
     }
-    const workerPages = new Map([
+    const workerPublicProfile = url.pathname.match(/^\/workers\/profile\/([^/]+)$/);
+    if (workerPublicProfile) {
+      return sendHtml(response, 200, renderWorkerShell({ page: 'publicProfile', identifier: decodeURIComponent(workerPublicProfile[1]) }), { 'cache-control': 'public, max-age=60' }, request);
+    }    const workerPages = new Map([
       ['/workers', 'opportunities'], ['/workers/', 'opportunities'], ['/workers/opportunities', 'opportunities'],
       ['/workers/login', 'login'], ['/workers/signup', 'signup'], ['/workers/dashboard', 'dashboard'],
       ['/workers/profile', 'profile'], ['/workers/certifications', 'certifications'], ['/workers/documents', 'documents'],

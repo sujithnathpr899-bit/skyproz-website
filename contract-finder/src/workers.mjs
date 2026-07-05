@@ -22,6 +22,9 @@ export const AVAILABILITY_OPTIONS = [
 ];
 
 export const APPLICATION_STATUSES = ['submitted', 'viewed', 'shortlisted', 'interview', 'offer', 'rejected', 'withdrawn'];
+export const SKILL_LEVELS = ['Beginner', 'Intermediate', 'Advanced', 'Expert'];
+export const RESUME_TEMPLATES = ['executive', 'ats', 'compact'];
+export const SUBSCRIPTION_PLANS = ['FREE', 'PREMIUM'];
 
 const ALLOWED_EXTENSIONS = new Set(['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png']);
 const ALLOWED_MIME_TYPES = new Set([
@@ -55,6 +58,20 @@ function validSkills(value) {
 function validAvailability(value, fallback = 'Available Immediately') {
   const text = clean(value, fallback);
   return AVAILABILITY_OPTIONS.includes(text) ? text : text || fallback;
+}
+function validSkillLevel(value, fallback = 'Intermediate') {
+  const text = clean(value, fallback);
+  return SKILL_LEVELS.includes(text) ? text : fallback;
+}
+
+function validResumeTemplate(value, fallback = 'executive') {
+  const text = clean(value, fallback).toLowerCase();
+  return RESUME_TEMPLATES.includes(text) ? text : fallback;
+}
+
+function boolValue(value, fallback = false) {
+  if (value === undefined || value === null || value === '') return Boolean(fallback);
+  return value === true || value === 1 || value === '1' || String(value).toLowerCase() === 'true' || String(value).toLowerCase() === 'on';
 }
 
 function jsonSettings(value) {
@@ -130,17 +147,113 @@ function workerVerificationBadges(worker, documents = [], experience = []) {
   const approved = (type) => documents.some((doc) => doc.document_type === type && doc.status === 'approved');
   const approvedCertificate = (text) => documents.some((doc) => doc.status === 'approved' && doc.document_type.toLowerCase().includes(text));
   return [
-    { label: 'Verified Profile', verified: Boolean(worker.profile_verified) },
-    { label: 'Verified Passport', verified: approved('Passport') },
-    { label: 'Verified Documents', verified: documents.some((doc) => doc.status === 'approved') },
-    { label: 'Verified Experience', verified: experience.length > 0 },
+    { label: 'Verified Worker', verified: Boolean(worker.profile_verified) },
+    { label: 'Passport Verified', verified: approved('Passport') },
+    { label: 'Documents Verified', verified: documents.some((doc) => doc.status === 'approved') },
+    { label: 'Experience Verified', verified: experience.length > 0 },
     { label: 'IRATA Verified', verified: approvedCertificate('irata') || stringList(worker.skills).some((skill) => skill.startsWith('IRATA')) },
-    { label: 'NDT Verified', verified: approvedCertificate('ndt') || stringList(worker.skills).includes('NDT') }
+    { label: 'NDT Verified', verified: approvedCertificate('ndt') || stringList(worker.skills).includes('NDT') },
+    { label: 'Medical Verified', verified: approved('Medical Certificate') }
   ];
 }
 
+
+function uniqueWorkerPublicSlug(name, workerId = null) {
+  const base = slugify(name || `worker-${workerId || crypto.randomUUID().slice(0, 8)}`) || `worker-${workerId || Date.now()}`;
+  let candidate = base;
+  let counter = 2;
+  while (db.prepare('SELECT id FROM workers WHERE public_slug = ? AND id <> COALESCE(?, -1)').get(candidate, workerId)) candidate = `${base}-${counter++}`;
+  return candidate;
+}
+
+function ensureWorkerPublicSlug(row) {
+  if (!row) return null;
+  if (row.public_slug) return row.public_slug;
+  const slug = uniqueWorkerPublicSlug(row.full_name, row.id);
+  db.prepare('UPDATE workers SET public_slug = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(slug, row.id);
+  row.public_slug = slug;
+  return slug;
+}
+
+function serializeSkillLevel(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    worker_id: row.worker_id,
+    skill_name: row.skill_name,
+    skill_level: row.skill_level,
+    years_experience: row.years_experience,
+    verified: Boolean(row.verified),
+    created_at: row.created_at,
+    updated_at: row.updated_at
+  };
+}
+
+function serializeCertification(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    worker_id: row.worker_id,
+    certificate_name: row.certificate_name,
+    certificate_number: row.certificate_number,
+    issuing_authority: row.issuing_authority,
+    issue_date: row.issue_date,
+    expiry_date: row.expiry_date,
+    verification_status: row.expiry_date && new Date(row.expiry_date) < new Date() && row.verification_status !== 'rejected' ? 'expired' : row.verification_status,
+    document_id: row.document_id,
+    created_at: row.created_at,
+    updated_at: row.updated_at
+  };
+}
+
+function serializeJobAlert(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    worker_id: row.worker_id,
+    country: row.country,
+    trade: row.trade,
+    industry: row.industry,
+    salary: row.salary,
+    rotation: row.rotation,
+    offshore: Boolean(row.offshore),
+    email_enabled: Boolean(row.email_enabled),
+    dashboard_enabled: Boolean(row.dashboard_enabled),
+    whatsapp_future: Boolean(row.whatsapp_future),
+    is_active: Boolean(row.is_active),
+    created_at: row.created_at,
+    updated_at: row.updated_at
+  };
+}
+
+function serializeInterview(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    worker_id: row.worker_id,
+    application_id: row.application_id,
+    employer_name: row.employer_name,
+    interview_title: row.interview_title,
+    scheduled_at: row.scheduled_at,
+    meeting_url: row.meeting_url,
+    status: row.status,
+    employer_note: row.employer_note,
+    created_at: row.created_at,
+    updated_at: row.updated_at
+  };
+}
+
+function serializeActivity(row) {
+  return row ? { ...row } : null;
+}
+
+function logWorkerActivity(workerId, activityType, title, message = '') {
+  db.prepare('INSERT INTO worker_activity(worker_id, activity_type, title, message) VALUES (?, ?, ?, ?)')
+    .run(workerId, clean(activityType), clean(title), clean(message) || null);
+}
 function serializeWorker(row) {
   if (!row) return null;
+  const publicSlug = ensureWorkerPublicSlug(row);
   const worker = {
     id: row.id,
     full_name: row.full_name,
@@ -153,6 +266,15 @@ function serializeWorker(row) {
     passport_number: row.passport_number,
     trade_profession: row.trade_profession,
     professional_title: row.professional_title || row.trade_profession,
+    public_slug: publicSlug,
+    public_profile_enabled: Boolean(row.public_profile_enabled),
+    public_profile_url: `/workers/profile/${publicSlug}`,
+    profile_views: row.profile_views || 0,
+    employer_searches: row.employer_searches || 0,
+    subscription_plan: row.subscription_plan || 'FREE',
+    subscription_renewal: row.subscription_renewal,
+    resume_template: row.resume_template || 'executive',
+    ai_resume_score: row.ai_resume_score || 0,
     years_experience: row.years_experience,
     highest_qualification: row.highest_qualification,
     profile_photo_url: row.profile_photo_url,
@@ -337,6 +459,7 @@ export function updateWorkerProfile(workerId, input) {
     JSON.stringify(next.preferred_countries), next.preferred_salary, next.profile_completion, workerId
   );
   applyWorkerProfileExtras(workerId, input);
+  logWorkerActivity(workerId, 'profile.updated', 'Profile updated', 'Worker profile details were updated.');
   return refreshWorkerCompletion(workerId);
 }
 
@@ -504,10 +627,10 @@ export function listWorkerExperience(workerId) {
 
 export function addWorkerExperience(workerId, input) {
   requireFields(input, ['company', 'position', 'country', 'start_date']);
-  const result = db.prepare(`INSERT INTO worker_experience(worker_id, company, position, country, start_date, end_date, description)
-    VALUES (?, ?, ?, ?, ?, ?, ?)`).run(
+  const result = db.prepare(`INSERT INTO worker_experience(worker_id, company, position, country, start_date, end_date, description, current_employer)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(
     workerId, clean(input.company), clean(input.position), clean(input.country), normalizeIsoDate(input.start_date) || clean(input.start_date),
-    normalizeIsoDate(input.end_date) || null, clean(input.description) || null
+    normalizeIsoDate(input.end_date) || null, clean(input.description) || null, Number(boolValue(input.current_employer))
   );
   refreshWorkerCompletion(workerId);
   return serializeExperience(db.prepare('SELECT * FROM worker_experience WHERE id = ?').get(result.lastInsertRowid));
@@ -516,11 +639,12 @@ export function addWorkerExperience(workerId, input) {
 export function updateWorkerExperience(workerId, experienceId, input) {
   const current = db.prepare('SELECT * FROM worker_experience WHERE id = ? AND worker_id = ?').get(experienceId, workerId);
   if (!current) throw Object.assign(new Error('Experience not found'), { status: 404 });
-  db.prepare(`UPDATE worker_experience SET company = ?, position = ?, country = ?, start_date = ?, end_date = ?, description = ?, updated_at = CURRENT_TIMESTAMP
+  db.prepare(`UPDATE worker_experience SET company = ?, position = ?, country = ?, start_date = ?, end_date = ?, description = ?, current_employer = ?, updated_at = CURRENT_TIMESTAMP
     WHERE id = ? AND worker_id = ?`).run(
     clean(input.company, current.company), clean(input.position, current.position), clean(input.country, current.country),
     normalizeIsoDate(input.start_date) || current.start_date, input.end_date === undefined ? current.end_date : normalizeIsoDate(input.end_date) || null,
-    input.description === undefined ? current.description : clean(input.description) || null, experienceId, workerId
+    input.description === undefined ? current.description : clean(input.description) || null,
+    input.current_employer === undefined ? current.current_employer : Number(boolValue(input.current_employer)), experienceId, workerId
   );
   refreshWorkerCompletion(workerId);
   return serializeExperience(db.prepare('SELECT * FROM worker_experience WHERE id = ?').get(experienceId));
@@ -591,6 +715,275 @@ export function updateWorkerSettings(workerId, input) {
   applyWorkerProfileExtras(workerId, input);
   return refreshWorkerCompletion(workerId);
 }
+export function listWorkerSkillLevels(workerId) {
+  return db.prepare('SELECT * FROM worker_skill_levels WHERE worker_id = ? ORDER BY skill_name').all(workerId).map(serializeSkillLevel);
+}
+
+export function updateWorkerSkillLevels(workerId, skills = []) {
+  const entries = Array.isArray(skills) ? skills : [];
+  const transaction = db.transaction(() => {
+    db.prepare('DELETE FROM worker_skill_levels WHERE worker_id = ?').run(workerId);
+    const insert = db.prepare(`INSERT INTO worker_skill_levels(worker_id, skill_name, skill_level, years_experience, verified)
+      VALUES (?, ?, ?, ?, ?)`);
+    for (const item of entries) {
+      const skillName = clean(item.skill_name || item.name || item.skill);
+      if (!skillName) continue;
+      insert.run(workerId, skillName, validSkillLevel(item.skill_level || item.level), numberValue(item.years_experience), Number(boolValue(item.verified)));
+    }
+  });
+  transaction();
+  logWorkerActivity(workerId, 'skills.updated', 'Skills updated', 'Worker skill levels were updated.');
+  return refreshWorkerCompletion(workerId);
+}
+
+export function listWorkerCertificates(workerId) {
+  return db.prepare('SELECT * FROM worker_certifications WHERE worker_id = ? ORDER BY expiry_date IS NULL, expiry_date ASC, created_at DESC').all(workerId).map(serializeCertification);
+}
+
+export function saveWorkerCertificate(workerId, input) {
+  requireFields(input, ['certificate_name']);
+  const id = Number(input.id || 0);
+  if (id) {
+    const current = db.prepare('SELECT * FROM worker_certifications WHERE id = ? AND worker_id = ?').get(id, workerId);
+    if (!current) throw Object.assign(new Error('Certificate not found'), { status: 404 });
+    db.prepare(`UPDATE worker_certifications SET certificate_name = ?, certificate_number = ?, issuing_authority = ?, issue_date = ?, expiry_date = ?, verification_status = ?, document_id = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND worker_id = ?`).run(
+      clean(input.certificate_name, current.certificate_name), clean(input.certificate_number) || null, clean(input.issuing_authority) || null,
+      normalizeIsoDate(input.issue_date) || null, normalizeIsoDate(input.expiry_date) || null,
+      clean(input.verification_status, current.verification_status), input.document_id ? Number(input.document_id) : null, id, workerId
+    );
+    logWorkerActivity(workerId, 'certificate.updated', 'Certificate updated', clean(input.certificate_name, current.certificate_name));
+    return serializeCertification(db.prepare('SELECT * FROM worker_certifications WHERE id = ?').get(id));
+  }
+  const result = db.prepare(`INSERT INTO worker_certifications(worker_id, certificate_name, certificate_number, issuing_authority, issue_date, expiry_date, verification_status, document_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    workerId, clean(input.certificate_name), clean(input.certificate_number) || null, clean(input.issuing_authority) || null,
+    normalizeIsoDate(input.issue_date) || null, normalizeIsoDate(input.expiry_date) || null,
+    clean(input.verification_status, 'pending'), input.document_id ? Number(input.document_id) : null
+  );
+  logWorkerActivity(workerId, 'certificate.added', 'Certificate added', clean(input.certificate_name));
+  refreshWorkerCompletion(workerId);
+  return serializeCertification(db.prepare('SELECT * FROM worker_certifications WHERE id = ?').get(result.lastInsertRowid));
+}
+
+export function deleteWorkerCertificate(workerId, certificateId) {
+  const result = db.prepare('DELETE FROM worker_certifications WHERE id = ? AND worker_id = ?').run(certificateId, workerId);
+  if (!result.changes) throw Object.assign(new Error('Certificate not found'), { status: 404 });
+  logWorkerActivity(workerId, 'certificate.deleted', 'Certificate deleted', `Certificate ${certificateId} removed.`);
+  refreshWorkerCompletion(workerId);
+}
+
+export function listWorkerJobAlerts(workerId) {
+  return db.prepare('SELECT * FROM worker_job_alerts WHERE worker_id = ? ORDER BY created_at DESC').all(workerId).map(serializeJobAlert);
+}
+
+export function createWorkerJobAlert(workerId, input) {
+  const result = db.prepare(`INSERT INTO worker_job_alerts(worker_id, country, trade, industry, salary, rotation, offshore, email_enabled, dashboard_enabled, whatsapp_future)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    workerId, clean(input.country) || null, clean(input.trade) || null, clean(input.industry) || null, clean(input.salary) || null, clean(input.rotation) || null,
+    Number(boolValue(input.offshore)), Number(boolValue(input.email_enabled, true)), Number(boolValue(input.dashboard_enabled, true)), Number(boolValue(input.whatsapp_future))
+  );
+  logWorkerActivity(workerId, 'alert.created', 'Job alert created', [input.country, input.trade, input.industry].map(clean).filter(Boolean).join(' | '));
+  return serializeJobAlert(db.prepare('SELECT * FROM worker_job_alerts WHERE id = ?').get(result.lastInsertRowid));
+}
+
+export function deleteWorkerJobAlert(workerId, alertId) {
+  const result = db.prepare('DELETE FROM worker_job_alerts WHERE id = ? AND worker_id = ?').run(alertId, workerId);
+  if (!result.changes) throw Object.assign(new Error('Job alert not found'), { status: 404 });
+}
+
+export function listWorkerInterviews(workerId) {
+  return db.prepare('SELECT * FROM worker_interviews WHERE worker_id = ? ORDER BY scheduled_at DESC').all(workerId).map(serializeInterview);
+}
+
+export function listWorkerActivity(workerId) {
+  return db.prepare('SELECT * FROM worker_activity WHERE worker_id = ? ORDER BY created_at DESC LIMIT 50').all(workerId).map(serializeActivity);
+}
+
+function sanitizePublicWorker(worker) {
+  if (!worker) return null;
+  const cv = listWorkerDocuments(worker.id).find((doc) => /cv|resume/i.test(doc.document_type) && doc.status !== 'rejected');
+  return {
+    id: worker.id,
+    full_name: worker.full_name,
+    public_slug: worker.public_slug,
+    public_profile_url: worker.public_profile_url,
+    profile_photo_url: worker.profile_photo_url,
+    professional_title: worker.professional_title,
+    country: worker.country,
+    current_location: worker.current_location,
+    trade_profession: worker.trade_profession,
+    years_experience: worker.years_experience,
+    skills: worker.skills,
+    skill_levels: worker.skill_levels,
+    certificates: worker.certifications,
+    availability: worker.availability,
+    languages: worker.languages,
+    biography: worker.biography,
+    verification_badges: worker.verification_badges,
+    profile_completion: worker.profile_completion,
+    profile_completion_details: worker.profile_completion_details,
+    profile_views: worker.profile_views,
+    cv_download_url: cv ? `/api/workers/public/${worker.public_slug}/cv` : null,
+    qr_url: `/api/workers/public/${worker.public_slug}/qr.svg`,
+    share_url: `/workers/profile/${worker.public_slug}`
+  };
+}
+
+export function getPublicWorkerProfile(slug, { track = true, source = 'public' } = {}) {
+  const row = db.prepare("SELECT * FROM workers WHERE public_slug = ? AND public_profile_enabled = 1 AND status = 'active'").get(clean(slug));
+  if (!row) throw Object.assign(new Error('Public worker profile not found'), { status: 404 });
+  if (track) {
+    db.prepare('UPDATE workers SET profile_views = profile_views + 1 WHERE id = ?').run(row.id);
+    db.prepare('INSERT INTO worker_profile_views(worker_id, viewer_type, source) VALUES (?, ?, ?)').run(row.id, 'public', clean(source) || null);
+    row.profile_views = (row.profile_views || 0) + 1;
+  }
+  return sanitizePublicWorker(serializeWorker(row));
+}
+
+export function getPublicWorkerCvDownload(slug) {
+  const profile = getPublicWorkerProfile(slug, { track: false });
+  const row = db.prepare(`SELECT * FROM worker_documents WHERE worker_id = ? AND document_type = 'CV / Resume' AND status <> 'rejected' ORDER BY uploaded_at DESC LIMIT 1`).get(profile.id);
+  if (!row) throw Object.assign(new Error('Public CV is not available'), { status: 404 });
+  return getWorkerDocumentDownload(profile.id, row.id);
+}
+
+function resumeLines(worker) {
+  const skills = worker.skill_levels?.length ? worker.skill_levels.map((item) => `${item.skill_name} (${item.skill_level})`) : worker.skills;
+  const certifications = worker.certifications || [];
+  const experience = worker.experience || [];
+  return [
+    worker.full_name,
+    worker.professional_title || worker.trade_profession,
+    `${worker.country} | ${worker.current_location} | ${worker.years_experience} years experience`,
+    `Availability: ${worker.availability}`,
+    `Languages: ${(worker.languages || []).join(', ') || 'Not specified'}`,
+    '',
+    'Professional Summary',
+    worker.biography || `${worker.trade_profession} with ${worker.years_experience} years of industrial services experience.`,
+    '',
+    'Skills',
+    ...(skills.length ? skills : ['Skills available on request']),
+    '',
+    'Certifications',
+    ...(certifications.length ? certifications.map((item) => `${item.certificate_name}${item.certificate_number ? ` - ${item.certificate_number}` : ''}${item.expiry_date ? ` | Expires ${item.expiry_date}` : ''}`) : ['Certificates available on request']),
+    '',
+    'Experience',
+    ...(experience.length ? experience.map((item) => `${item.position}, ${item.company}, ${item.country} (${item.start_date} - ${item.current_employer ? 'Present' : item.end_date || 'Present'}) ${item.description || ''}`) : ['Experience details available on request'])
+  ];
+}
+
+function escapePdfText(value) {
+  return String(value).replace(/[\\()]/g, (match) => '\\' + match).replace(/[\r\n]+/g, ' ');
+}
+
+function buildSimplePdf(lines) {
+  const body = lines.slice(0, 60).map((line, index) => `BT /F1 10 Tf 52 ${780 - index * 14} Td (${escapePdfText(line)}) Tj ET`).join('\n');
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    `<< /Length ${Buffer.byteLength(body)} >>\nstream\n${body}\nendstream`
+  ];
+  let pdf = '%PDF-1.4\n';
+  const offsets = [0];
+  objects.forEach((object, index) => { offsets.push(Buffer.byteLength(pdf)); pdf += `${index + 1} 0 obj\n${object}\nendobj\n`; });
+  const xref = Buffer.byteLength(pdf);
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (const offset of offsets.slice(1)) pdf += `${String(offset).padStart(10, '0')} 00000 n \n`;
+  pdf += `trailer << /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  return Buffer.from(pdf);
+}
+
+export function buildWorkerResume(workerId, template = 'executive') {
+  const worker = getWorker(workerId);
+  if (!worker) throw Object.assign(new Error('Worker not found'), { status: 404 });
+  const selectedTemplate = validResumeTemplate(template, worker.resume_template || 'executive');
+  const lines = resumeLines(worker);
+  return {
+    template: selectedTemplate,
+    worker: sanitizePublicWorker(worker),
+    ats_text: lines.join('\n'),
+    sections: {
+      summary: worker.biography || '',
+      skills: worker.skill_levels?.length ? worker.skill_levels : worker.skills,
+      certifications: worker.certifications,
+      experience: worker.experience
+    },
+    ai_resume_score: Math.min(100, Math.max(worker.profile_completion, worker.skill_levels.length * 8 + worker.certifications.length * 10 + worker.experience.length * 12))
+  };
+}
+
+export function downloadWorkerResume(workerId, format = 'pdf', template = 'executive') {
+  const resume = buildWorkerResume(workerId, template);
+  const filenameBase = slugify(resume.worker.full_name || 'skyproz-worker-resume');
+  if (format === 'ats' || format === 'txt') return { body: Buffer.from(resume.ats_text), filename: `${filenameBase}-ats.txt`, content_type: 'text/plain; charset=utf-8' };
+  return { body: buildSimplePdf(resume.ats_text.split('\n')), filename: `${filenameBase}-${resume.template}.pdf`, content_type: 'application/pdf' };
+}
+
+export function generateProfileQrSvg(slug, origin = '') {
+  const url = `${origin || ''}/workers/profile/${clean(slug)}`;
+  const size = 29;
+  const cell = 8;
+  const hash = crypto.createHash('sha256').update(url).digest();
+  const modules = Array.from({ length: size }, () => Array(size).fill(false));
+  const finder = (x, y) => {
+    for (let row = 0; row < 7; row++) for (let col = 0; col < 7; col++) {
+      const edge = row === 0 || row === 6 || col === 0 || col === 6;
+      const center = row >= 2 && row <= 4 && col >= 2 && col <= 4;
+      modules[y + row][x + col] = edge || center;
+    }
+  };
+  finder(0, 0); finder(size - 7, 0); finder(0, size - 7);
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    if (modules[y][x]) continue;
+    const bit = hash[(x * 7 + y * 11) % hash.length] >> ((x + y) % 8) & 1;
+    modules[y][x] = Boolean(bit && (x + y) % 3 !== 0);
+  }
+  const rects = [];
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) if (modules[y][x]) rects.push(`<rect x="${x * cell}" y="${y * cell}" width="${cell}" height="${cell}"/>`);
+  const dimension = size * cell;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${dimension}" height="${dimension}" viewBox="0 0 ${dimension} ${dimension}" role="img" aria-label="Skyproz worker profile QR"><title>${url}</title><rect width="100%" height="100%" fill="#f7fbff"/><g fill="#07101e">${rects.join('')}</g></svg>`;
+}
+
+export function workerAnalytics(workerId) {
+  const worker = getWorker(workerId);
+  const applications = listWorkerApplications(workerId);
+  const interviews = listWorkerInterviews(workerId);
+  const views = db.prepare('SELECT COUNT(*) AS count FROM worker_profile_views WHERE worker_id = ?').get(workerId).count;
+  const viewedApplications = applications.filter((item) => ['viewed', 'shortlisted', 'interview', 'offer'].includes(item.status)).length;
+  return {
+    profile_views: views || worker.profile_views || 0,
+    employer_searches: worker.employer_searches || 0,
+    applications: applications.length,
+    interview_rate: applications.length ? Math.round((interviews.length / applications.length) * 100) : 0,
+    profile_strength: worker.profile_completion,
+    response_rate: applications.length ? Math.round((viewedApplications / applications.length) * 100) : 0,
+    ai_resume_score: buildWorkerResume(workerId, worker.resume_template).ai_resume_score
+  };
+}
+
+export function workerSubscription(workerId) {
+  const worker = getWorker(workerId);
+  const billing_history = db.prepare('SELECT * FROM worker_billing_history WHERE worker_id = ? ORDER BY billing_date DESC LIMIT 20').all(workerId);
+  return {
+    current_plan: worker.subscription_plan || 'FREE',
+    renewal: worker.subscription_renewal,
+    plans: SUBSCRIPTION_PLANS.map((plan) => ({ name: plan, current: plan === (worker.subscription_plan || 'FREE') })),
+    billing_history
+  };
+}
+
+export function deleteWorkerDocument(workerId, documentId) {
+  const row = db.prepare('SELECT * FROM worker_documents WHERE id = ? AND worker_id = ?').get(documentId, workerId);
+  if (!row) throw Object.assign(new Error('Document not found'), { status: 404 });
+  db.prepare('DELETE FROM worker_documents WHERE id = ? AND worker_id = ?').run(documentId, workerId);
+  const filePath = path.join(documentDirectory(), row.stored_filename);
+  if (fs.existsSync(filePath)) fs.rmSync(filePath, { force: true });
+  logWorkerActivity(workerId, 'document.deleted', 'Document deleted', row.document_name || row.document_type);
+  refreshWorkerCompletion(workerId);
+}
 export function adminListWorkers(filters = {}) {
   const where = [];
   const values = [];
@@ -638,6 +1031,9 @@ export function workerFilterOptions() {
     document_types: DOCUMENT_TYPES,
     availability_options: AVAILABILITY_OPTIONS,
     application_statuses: APPLICATION_STATUSES,
+    skill_levels: SKILL_LEVELS,
+    resume_templates: RESUME_TEMPLATES,
+    subscription_plans: SUBSCRIPTION_PLANS,
     countries: distinct('worker_jobs', 'country'),
     industries: distinct('worker_jobs', 'industry'),
     trades: distinct('worker_jobs', 'trade'),

@@ -1,6 +1,3 @@
-﻿import { clearWorkerCookie, createWorkerToken, currentWorker, requireWorker, workerCookie } from './worker-auth.mjs';
-import { requireAdmin } from './auth.mjs';
-import { readJson, sendBody, sendJson } from './utils.mjs';
 import {
   addWorkerExperience,
   adminListWorkers,
@@ -8,28 +5,45 @@ import {
   adminUpdateWorker,
   applyToJob,
   authenticateWorker,
+  buildWorkerResume,
   createWorker,
+  createWorkerJobAlert,
+  deleteWorkerCertificate,
+  deleteWorkerDocument,
   deleteWorkerExperience,
+  deleteWorkerJobAlert,
+  downloadWorkerResume,
+  generateProfileQrSvg,
   getJob,
+  getPublicWorkerCvDownload,
+  getPublicWorkerProfile,
   getWorker,
   getWorkerDocumentDownload,
   listSavedJobs,
+  listWorkerActivity,
   listWorkerApplications,
+  listWorkerCertificates,
   listWorkerDocuments,
   listWorkerExperience,
+  listWorkerInterviews,
+  listWorkerJobAlerts,
   listWorkerNotifications,
   markWorkerNotification,
   replaceWorkerDocument,
   saveJob,
+  saveWorkerCertificate,
   searchJobs,
   unsaveJob,
   updateWorkerExperience,
   updateWorkerProfile,
   updateWorkerSettings,
+  updateWorkerSkillLevels,
   uploadWorkerDocument,
   workerAdminExport,
+  workerAnalytics,
   workerDashboard,
   workerFilterOptions,
+  workerSubscription,
   withdrawApplication
 } from './workers.mjs';
 
@@ -77,6 +91,22 @@ export async function handleWorkerApi(request, response, url) {
       sendJson(response, 200, workerFilterOptions(), { 'cache-control': 'public, max-age=300' }); return true;
     }
 
+
+    let publicRoute = match(pathname, /^\/api\/workers\/public\/([^/]+)$/);
+    if (publicRoute && request.method === 'GET') {
+      sendJson(response, 200, { profile: getPublicWorkerProfile(decodeURIComponent(publicRoute[0]), { track: true, source: request.headers.referer || 'direct' }) }, { 'cache-control': 'public, max-age=60' }); return true;
+    }
+
+    publicRoute = match(pathname, /^\/api\/workers\/public\/([^/]+)\/qr\.svg$/);
+    if (publicRoute && request.method === 'GET') {
+      sendBody(response, 200, generateProfileQrSvg(decodeURIComponent(publicRoute[0]), `${url.protocol}//${url.host}`), { 'content-type': 'image/svg+xml; charset=utf-8', 'cache-control': 'public, max-age=3600' }, request); return true;
+    }
+
+    publicRoute = match(pathname, /^\/api\/workers\/public\/([^/]+)\/cv$/);
+    if (publicRoute && request.method === 'GET') {
+      const file = getPublicWorkerCvDownload(decodeURIComponent(publicRoute[0]));
+      sendBody(response, 200, file.body, { 'content-type': file.content_type, 'content-disposition': `attachment; filename="${file.filename.replaceAll('"', '')}"` }, request); return true;
+    }
     if (request.method === 'GET' && pathname === '/api/workers/auth/me') {
       const row = currentWorker(request);
       sendJson(response, 200, { worker: row ? getWorker(row.id) : null }); return true;
@@ -113,6 +143,80 @@ export async function handleWorkerApi(request, response, url) {
       sendJson(response, 200, workerDashboard(worker.id)); return true;
     }
 
+
+    if (request.method === 'GET' && pathname === '/api/workers/resume') {
+      const worker = requireWorker(request);
+      sendJson(response, 200, { resume: buildWorkerResume(worker.id, searchParams.get('template') || undefined) }); return true;
+    }
+
+    if (request.method === 'GET' && pathname === '/api/workers/resume/download') {
+      const worker = requireWorker(request);
+      const file = downloadWorkerResume(worker.id, searchParams.get('format') || 'pdf', searchParams.get('template') || undefined);
+      sendBody(response, 200, file.body, { 'content-type': file.content_type, 'content-disposition': `attachment; filename="${file.filename.replaceAll('"', '')}"` }, request); return true;
+    }
+
+    if (request.method === 'GET' && pathname === '/api/workers/analytics') {
+      const worker = requireWorker(request);
+      sendJson(response, 200, { analytics: workerAnalytics(worker.id) }); return true;
+    }
+
+    if (request.method === 'GET' && pathname === '/api/workers/subscription') {
+      const worker = requireWorker(request);
+      sendJson(response, 200, { subscription: workerSubscription(worker.id) }); return true;
+    }
+
+    if (request.method === 'GET' && pathname === '/api/workers/activity') {
+      const worker = requireWorker(request);
+      sendJson(response, 200, { items: listWorkerActivity(worker.id) }); return true;
+    }
+
+    if (request.method === 'GET' && pathname === '/api/workers/interviews') {
+      const worker = requireWorker(request);
+      sendJson(response, 200, { items: listWorkerInterviews(worker.id) }); return true;
+    }
+
+    if (request.method === 'GET' && pathname === '/api/workers/job-alerts') {
+      const worker = requireWorker(request);
+      sendJson(response, 200, { items: listWorkerJobAlerts(worker.id) }); return true;
+    }
+
+    if (request.method === 'POST' && pathname === '/api/workers/job-alerts') {
+      const worker = requireWorker(request);
+      sendJson(response, 201, { alert: createWorkerJobAlert(worker.id, await readJson(request, 100_000)) }); return true;
+    }
+
+    let workerRoute = match(pathname, /^\/api\/workers\/job-alerts\/(\d+)$/);
+    if (workerRoute && request.method === 'DELETE') {
+      const worker = requireWorker(request);
+      deleteWorkerJobAlert(worker.id, Number(workerRoute[0])); sendJson(response, 200, { ok: true }); return true;
+    }
+
+    if (request.method === 'GET' && pathname === '/api/workers/skills') {
+      const worker = requireWorker(request);
+      sendJson(response, 200, { items: getWorker(worker.id).skill_levels }); return true;
+    }
+
+    if (request.method === 'PUT' && pathname === '/api/workers/skills') {
+      const worker = requireWorker(request);
+      const body = await readJson(request, 250_000);
+      sendJson(response, 200, { worker: updateWorkerSkillLevels(worker.id, body.skills || []) }); return true;
+    }
+
+    if (request.method === 'GET' && pathname === '/api/workers/certifications') {
+      const worker = requireWorker(request);
+      sendJson(response, 200, { items: listWorkerCertificates(worker.id) }); return true;
+    }
+
+    if (request.method === 'POST' && pathname === '/api/workers/certifications') {
+      const worker = requireWorker(request);
+      sendJson(response, 201, { certificate: saveWorkerCertificate(worker.id, await readJson(request, 100_000)) }); return true;
+    }
+
+    workerRoute = match(pathname, /^\/api\/workers\/certifications\/(\d+)$/);
+    if (workerRoute && request.method === 'DELETE') {
+      const worker = requireWorker(request);
+      deleteWorkerCertificate(worker.id, Number(workerRoute[0])); sendJson(response, 200, { ok: true }); return true;
+    }
     if (request.method === 'GET' && pathname === '/api/workers/experience') {
       const worker = requireWorker(request);
       sendJson(response, 200, { items: listWorkerExperience(worker.id) }); return true;
@@ -123,7 +227,7 @@ export async function handleWorkerApi(request, response, url) {
       sendJson(response, 201, { experience: addWorkerExperience(worker.id, await readJson(request, 100_000)) }); return true;
     }
 
-    let workerRoute = match(pathname, /^\/api\/workers\/experience\/(\d+)$/);
+    workerRoute = match(pathname, /^\/api\/workers\/experience\/(\d+)$/);
     if (workerRoute && request.method === 'PATCH') {
       const worker = requireWorker(request);
       sendJson(response, 200, { experience: updateWorkerExperience(worker.id, Number(workerRoute[0]), await readJson(request, 100_000)) }); return true;
@@ -185,6 +289,12 @@ export async function handleWorkerApi(request, response, url) {
       sendJson(response, 201, { document: replaceWorkerDocument(worker.id, Number(workerRoute[0]), await readJson(request, 7_000_000)) }); return true;
     }
 
+
+    workerRoute = match(pathname, /^\/api\/workers\/documents\/(\d+)$/);
+    if (workerRoute && request.method === 'DELETE') {
+      const worker = requireWorker(request);
+      deleteWorkerDocument(worker.id, Number(workerRoute[0])); sendJson(response, 200, { ok: true }); return true;
+    }
     if (request.method === 'GET' && pathname === '/api/workers/jobs') {
       const worker = currentWorker(request);
       sendJson(response, 200, searchJobs(queryObject(searchParams), worker?.id)); return true;

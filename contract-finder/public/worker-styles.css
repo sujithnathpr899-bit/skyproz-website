@@ -192,3 +192,25 @@ th { color: var(--gold); font-size: .68rem; text-transform: uppercase; }
   .completion-checks,.badge-grid { justify-content: center; }
   .document-actions { min-width: 0; flex-wrap: wrap; }
 }
+.public-profile-grid { display: grid; grid-template-columns: 320px minmax(0,1fr) 280px; gap: 14px; align-items: start; }
+.public-profile h1 { margin: 0 0 10px; font-family: "Barlow Condensed"; font-size: clamp(2.8rem,6vw,4.8rem); line-height: .9; text-transform: uppercase; }
+.qr-card { text-align: center; }
+.qr-card img { width: min(220px,100%); border-radius: 16px; padding: 12px; background: #f7fbff; }
+.qr-card p { word-break: break-all; font-size: .72rem; }
+.compact-metrics { grid-template-columns: repeat(3,minmax(0,1fr)); margin: 18px 0; }
+.resume-layout { display: grid; grid-template-columns: minmax(0,1fr) 320px; gap: 14px; align-items: start; }
+.resume-preview pre { min-height: 680px; margin: 0; white-space: pre-wrap; color: #dbeaff; font: 500 .9rem/1.65 Inter, system-ui, sans-serif; }
+.plan-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; margin-bottom: 14px; }
+.plan-card.current { border-color: rgba(245,168,0,.45); background: linear-gradient(135deg, rgba(245,168,0,.14), rgba(10,25,43,.74)); }
+.mobile-bottom-nav { display: none; }
+@media (max-width: 1120px) {
+  .public-profile-grid,.resume-layout { grid-template-columns: 1fr; }
+  .qr-card { order: 3; }
+}
+@media (max-width: 760px) {
+  body { padding-bottom: 72px; }
+  .mobile-bottom-nav { position: fixed; left: 10px; right: 10px; bottom: 10px; z-index: 80; display: grid; grid-template-columns: repeat(5,1fr); gap: 4px; padding: 8px; border: 1px solid var(--line); border-radius: 16px; background: rgba(7,16,30,.96); box-shadow: var(--shadow); backdrop-filter: blur(16px); }
+  .mobile-bottom-nav a { display: grid; place-items: center; min-height: 42px; border-radius: 10px; color: var(--muted); font-size: .58rem; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; }
+  .mobile-bottom-nav a:hover,.mobile-bottom-nav a:focus-visible { color: var(--navy); background: linear-gradient(135deg,var(--gold),var(--orange)); }
+  .plan-grid,.compact-metrics { grid-template-columns: 1fr; }
+}

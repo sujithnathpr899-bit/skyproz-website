@@ -109,8 +109,10 @@ function renderWorkerAccountNavigation() {
 
 function pageToolbar(active = '') {
   const links = [
-    ['Dashboard', '/workers/dashboard'], ['Profile', '/workers/profile'], ['Documents', '/workers/documents'],
-    ['Applications', '/workers/applications'], ['Saved Jobs', '/workers/saved-jobs'], ['Notifications', '/workers/notifications'], ['Settings', '/workers/settings']
+    ['Dashboard', '/workers/dashboard'], ['Profile', '/workers/profile'], ['Resume', '/workers/resume'], ['Documents', '/workers/documents'],
+    ['Skills', '/workers/skills'], ['Applications', '/workers/applications'], ['Saved Jobs', '/workers/saved-jobs'],
+    ['Alerts', '/workers/job-alerts'], ['Interviews', '/workers/interviews'], ['Analytics', '/workers/analytics'],
+    ['Subscription', '/workers/subscription'], ['Notifications', '/workers/notifications'], ['Settings', '/workers/settings']
   ];
   return `<nav class="portal-tabs" aria-label="Worker dashboard sections">${links.map(([label, href]) => `<a class="${active === label ? 'active' : ''}" href="${href}">${label}</a>`).join('')}</nav>`;
 }
@@ -157,7 +159,7 @@ function bindJobActions(root = document) {
 }
 
 function documentRows(documents = []) {
-  return documents.map((doc) => `<tr><td>${escapeHtml(doc.document_name || doc.document_type)}</td><td>${escapeHtml(doc.document_type)}</td><td>${escapeHtml(doc.original_filename)}</td><td>${Math.round(doc.size_bytes / 1024)} KB</td><td><span class="status">${escapeHtml(doc.status)}</span></td><td>${dateText(doc.expiry_date)}</td><td>${dateText(doc.uploaded_at)}</td><td class="document-actions"><a class="button button-outline" href="${escapeHtml(doc.download_url)}">Download</a><button class="button button-outline" data-replace-document="${doc.id}">Replace</button></td></tr>`).join('') || '<tr><td colspan="8" class="empty-row">No documents uploaded yet.</td></tr>';
+  return documents.map((doc) => `<tr><td>${escapeHtml(doc.document_name || doc.document_type)}</td><td>${escapeHtml(doc.document_type)}</td><td>${escapeHtml(doc.original_filename)}</td><td>${Math.round(doc.size_bytes / 1024)} KB</td><td><span class="status">${escapeHtml(doc.status)}</span></td><td>${dateText(doc.expiry_date)}</td><td>${dateText(doc.uploaded_at)}</td><td class="document-actions"><a class="button button-outline" href="${escapeHtml(doc.download_url)}">Download</a><button class="button button-outline" data-replace-document="${doc.id}">Replace</button><button class="button button-outline" data-delete-document="${doc.id}">Delete</button></td></tr>`).join('') || '<tr><td colspan="8" class="empty-row">No documents uploaded yet.</td></tr>';
 }
 
 async function fileToBase64(file) {
@@ -221,7 +223,7 @@ function renderLogin() {
 async function renderDashboard() {
   if (!requireWorkerPage()) return;
   const data = await api('/dashboard');
-  app.innerHTML = `<section class="page-section dashboard-page">${pageToolbar('Dashboard')}<div class="section-heading"><div><p class="eyebrow">My Dashboard</p><h1>Welcome, ${escapeHtml(data.worker.full_name)}</h1></div><div class="toolbar">${button('Edit Profile','/workers/profile','button-gold')}<button class="button button-outline" id="logout">Logout</button></div></div>${completionWidget(data.worker)}<div class="metric-grid"><div class="metric"><strong>${data.worker.profile_completion}%</strong><span>Profile Completion</span></div><div class="metric"><strong>${data.counts.saved_jobs}</strong><span>Saved Jobs</span></div><div class="metric"><strong>${data.counts.applied_jobs}</strong><span>Applied Jobs</span></div><div class="metric"><strong>${data.counts.interview_invitations}</strong><span>Interview Invitations</span></div><div class="metric"><strong>${data.counts.messages}</strong><span>Messages</span></div><div class="metric"><strong>${data.counts.notifications}</strong><span>Notifications</span></div></div><div class="dashboard-grid"><section class="glass-panel"><h2>Verification Badges</h2>${verificationBadges(data.worker)}</section><section class="glass-panel"><h2>Quick Actions</h2><div class="quick-stack">${button('Upload Documents','/workers/documents','button-gold')}${button('View Applications','/workers/applications')}${button('Saved Jobs','/workers/saved-jobs')}${button('Account Settings','/workers/settings')}</div></section><section class="glass-panel"><h2>Recent Applications</h2><div class="list">${data.applications.map(applicationItem).join('') || '<div class="empty compact">No applications yet.</div>'}</div></section><section class="glass-panel"><h2>Recent Notifications</h2><div class="list">${data.notifications.map(notificationItem).join('') || '<div class="empty compact">No notifications yet.</div>'}</div></section></div></section>`;
+  app.innerHTML = `<section class="page-section dashboard-page">${pageToolbar('Dashboard')}<div class="section-heading"><div><p class="eyebrow">My Dashboard</p><h1>Welcome, ${escapeHtml(data.worker.full_name)}</h1></div><div class="toolbar">${button('Edit Profile','/workers/profile','button-gold')}<button class="button button-outline" id="logout">Logout</button></div></div>${completionWidget(data.worker)}<div class="metric-grid"><div class="metric"><strong>${data.worker.profile_completion}%</strong><span>Profile Completion</span></div><div class="metric"><strong>${data.counts.saved_jobs}</strong><span>Saved Jobs</span></div><div class="metric"><strong>${data.counts.applied_jobs}</strong><span>Applied Jobs</span></div><div class="metric"><strong>${data.counts.interview_invitations}</strong><span>Interview Invitations</span></div><div class="metric"><strong>${data.counts.messages}</strong><span>Messages</span></div><div class="metric"><strong>${data.counts.notifications}</strong><span>Notifications</span></div><div class="metric"><strong>${data.counts.interviews || 0}</strong><span>Interviews</span></div><div class="metric"><strong>${data.counts.certificates || 0}</strong><span>Certificates</span></div><div class="metric"><strong>${data.counts.profile_views || 0}</strong><span>Profile Views</span></div></div><div class="dashboard-grid"><section class="glass-panel"><h2>Verification Badges</h2>${verificationBadges(data.worker)}</section><section class="glass-panel"><h2>Quick Actions</h2><div class="quick-stack">${button('Upload Documents','/workers/documents','button-gold')}${button('Resume Builder','/workers/resume')}${button('Job Alerts','/workers/job-alerts')}${button('Interviews','/workers/interviews')}${button('Analytics','/workers/analytics')}${button('Account Settings','/workers/settings')}</div></section><section class="glass-panel"><h2>Recent Applications</h2><div class="list">${data.applications.map(applicationItem).join('') || '<div class="empty compact">No applications yet.</div>'}</div></section><section class="glass-panel"><h2>Recent Notifications</h2><div class="list">${data.notifications.map(notificationItem).join('') || '<div class="empty compact">No notifications yet.</div>'}</div></section><section class="glass-panel"><h2>Recent Activity</h2><div class="list">${(data.activity || []).map((item) => `<div class="list-item"><div><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.message || item.activity_type)}</span></div><span>${dateText(item.created_at)}</span></div>`).join('') || '<div class="empty compact">No recent activity.</div>'}</div></section></div></section>`;
   document.querySelector('#logout').onclick = async () => { await api('/auth/logout', { method: 'POST', body: '{}' }); location.href = '/workers/login'; };
 }
 
@@ -251,7 +253,12 @@ async function renderDocuments(pageTitle = 'My Documents', active = 'Documents',
   const items = certificateOnly ? data.items.filter((doc) => /certificate|resume|cv|medical|passport/i.test(doc.document_type)) : data.items;
   app.innerHTML = `<section class="page-section">${pageToolbar(active)}<div class="section-heading"><div><p class="eyebrow">Worker document vault</p><h1>${escapeHtml(pageTitle)}</h1></div><p>Upload, replace and track certificates, passport, CV, medical and experience documents.</p></div><div class="dashboard-grid"><section class="glass-panel"><h2>${escapeHtml(pageTitle)}</h2><div class="table-wrap"><table><thead><tr><th>Name</th><th>Type</th><th>File</th><th>Size</th><th>Status</th><th>Expiry</th><th>Uploaded</th><th>Actions</th></tr></thead><tbody>${documentRows(items)}</tbody></table></div></section>${documentUploadForm(certificateOnly ? 'Upload Certificate' : 'Upload Document')}</div></section>`;
   bindDocumentUpload(document.querySelector('#document-form'));
-  document.querySelectorAll('[data-replace-document]').forEach((button) => {
+  document.querySelectorAll('[data-delete-document]').forEach((button) => {
+    button.onclick = async () => {
+      try { await api(`/documents/${button.dataset.deleteDocument}`, { method: 'DELETE' }); toast('Document deleted'); setTimeout(() => location.reload(), 500); }
+      catch (error) { toast(error.message, true); }
+    };
+  });  document.querySelectorAll('[data-replace-document]').forEach((button) => {
     button.onclick = () => {
       const form = document.querySelector('#document-form');
       form.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -306,6 +313,71 @@ async function renderSettings() {
   };
 }
 
+async function renderPublicProfile() {
+  const { profile } = await api(`/public/${encodeURIComponent(identifier)}`);
+  const shareUrl = `${location.origin}${profile.share_url}`;
+  app.innerHTML = `<section class="page-section public-profile"><div class="public-profile-grid"><aside class="glass-panel profile-card"><div class="profile-avatar">${escapeHtml((profile.full_name || 'S').charAt(0))}</div><h1>${escapeHtml(profile.full_name)}</h1><p>${escapeHtml(profile.professional_title || profile.trade_profession)}</p><div class="chip-row"><span>${escapeHtml(profile.country)}</span><span>${profile.years_experience}+ years</span><span>${escapeHtml(profile.availability)}</span></div>${verificationBadges(profile)}<div class="toolbar">${profile.cv_download_url ? button('Download CV', profile.cv_download_url, 'button-gold') : ''}<button class="button button-outline" data-copy-profile>Copy Public Profile Link</button></div></aside><article class="glass-panel"><p class="eyebrow">Public worker profile</p><h2>${escapeHtml(profile.professional_title || profile.trade_profession)}</h2><p>${escapeHtml(profile.biography || 'Professional worker profile registered with Skyproz Services.')}</p><div class="metric-grid compact-metrics"><div class="metric"><strong>${profile.profile_completion}%</strong><span>Profile Strength</span></div><div class="metric"><strong>${profile.profile_views}</strong><span>Profile Views</span></div><div class="metric"><strong>${(profile.certificates || []).length}</strong><span>Certificates</span></div></div><h3>Skills</h3><div class="chip-row">${(profile.skill_levels?.length ? profile.skill_levels.map((skill) => `${skill.skill_name} - ${skill.skill_level}`) : profile.skills || []).map((skill) => `<span>${escapeHtml(skill)}</span>`).join('') || '<span>Skills available on request</span>'}</div><h3>Certificates</h3><div class="list">${(profile.certificates || []).map((cert) => `<div class="list-item"><div><strong>${escapeHtml(cert.certificate_name)}</strong><span>${escapeHtml(cert.certificate_number || 'Certificate number pending')} | ${escapeHtml(cert.verification_status)}</span></div><span>${dateText(cert.expiry_date)}</span></div>`).join('') || '<div class="empty compact">No certificates listed yet.</div>'}</div></article><aside class="glass-panel qr-card"><h2>Share Profile</h2><img src="${escapeHtml(profile.qr_url)}" alt="Public profile QR code" loading="lazy"><p>${escapeHtml(shareUrl)}</p><a class="button button-outline" href="${escapeHtml(profile.qr_url)}" download="skyproz-profile-qr.svg">Download QR</a></aside></div></section>`;
+  document.querySelector('[data-copy-profile]')?.addEventListener('click', async () => { await navigator.clipboard?.writeText(shareUrl); toast('Public profile link copied'); });
+}
+
+async function renderResume() {
+  if (!requireWorkerPage()) return;
+  const { resume } = await api('/resume');
+  app.innerHTML = `<section class="page-section">${pageToolbar('Resume')}<div class="section-heading"><div><p class="eyebrow">Resume builder</p><h1>Professional Resume</h1></div><div class="toolbar"><a class="button button-gold" href="/api/workers/resume/download?format=pdf">Download PDF</a><a class="button button-outline" href="/api/workers/resume/download?format=ats">ATS Friendly Resume</a></div></div><div class="resume-layout"><article class="glass-panel resume-preview"><pre>${escapeHtml(resume.ats_text)}</pre></article><aside class="glass-panel"><h2>Resume Score</h2><div class="completion-ring" style="--progress:${resume.ai_resume_score}%"><strong>${resume.ai_resume_score}%</strong><span>Score</span></div><p>Built from profile details, skills, certifications and experience. Supported templates: Executive, ATS and Compact.</p></aside></div></section>`;
+}
+
+function skillLevelRows(items = []) {
+  return items.map((item) => `<tr><td><input name="skill_name" value="${escapeHtml(item.skill_name)}"></td><td><select name="skill_level">${['Beginner','Intermediate','Advanced','Expert'].map((level) => option(level, item.skill_level)).join('')}</select></td><td><input name="years_experience" type="number" min="0" value="${item.years_experience || 0}"></td><td>${item.verified ? 'Verified' : 'Pending'}</td></tr>`).join('') || `<tr><td><input name="skill_name" placeholder="Rope Access"></td><td><select name="skill_level">${['Beginner','Intermediate','Advanced','Expert'].map((level) => option(level, 'Intermediate')).join('')}</select></td><td><input name="years_experience" type="number" min="0" value="0"></td><td>Pending</td></tr>`;
+}
+
+async function renderSkills() {
+  if (!requireWorkerPage()) return;
+  const { items } = await api('/skills');
+  app.innerHTML = `<section class="page-section">${pageToolbar('Skills')}<div class="section-heading"><div><p class="eyebrow">Skill levels</p><h1>Skills</h1></div><p>Add unlimited skills and levels for better future AI job matching.</p></div><form id="skills-form" class="glass-panel"><div class="table-wrap"><table id="skills-table"><thead><tr><th>Skill</th><th>Level</th><th>Years</th><th>Status</th></tr></thead><tbody>${skillLevelRows(items)}</tbody></table></div><div class="toolbar"><button class="button button-outline" type="button" id="add-skill-row">Add Skill</button><button class="button button-gold">Save Skills</button></div></form></section>`;
+  document.querySelector('#add-skill-row').onclick = () => document.querySelector('#skills-table tbody').insertAdjacentHTML('beforeend', skillLevelRows([]));
+  document.querySelector('#skills-form').onsubmit = async (event) => {
+    event.preventDefault();
+    const rows = [...document.querySelectorAll('#skills-table tbody tr')].map((row) => ({ skill_name: row.querySelector('[name="skill_name"]').value, skill_level: row.querySelector('[name="skill_level"]').value, years_experience: row.querySelector('[name="years_experience"]').value })).filter((item) => item.skill_name.trim());
+    try { await api('/skills', { method: 'PUT', body: JSON.stringify({ skills: rows }) }); toast('Skills saved'); }
+    catch (error) { toast(error.message, true); }
+  };
+}
+async function renderJobAlerts() {
+  if (!requireWorkerPage()) return;
+  const { items } = await api('/job-alerts');
+  app.innerHTML = `<section class="page-section">${pageToolbar('Alerts')}<div class="section-heading"><div><p class="eyebrow">Job alerts</p><h1>Alerts</h1></div><p>Choose country, trade, industry, salary, rotation and offshore preferences.</p></div><div class="dashboard-grid"><section class="glass-panel"><h2>Active Alerts</h2><div class="list">${items.map((alert) => `<div class="list-item"><div><strong>${escapeHtml([alert.country, alert.trade, alert.industry].filter(Boolean).join(' | ') || 'General alert')}</strong><span>${escapeHtml(alert.salary || 'Any salary')} | ${escapeHtml(alert.rotation || 'Any rotation')} | ${alert.offshore ? 'Offshore' : 'Onshore/Any'}</span></div><button class="button button-outline" data-delete-alert="${alert.id}">Delete</button></div>`).join('') || '<div class="empty compact">No alerts yet.</div>'}</div></section><form id="alert-form" class="glass-panel"><h2>Create Alert</h2>${field('country','Country')}${field('trade','Trade')}${field('industry','Industry')}${field('salary','Salary')}${field('rotation','Rotation')}<label class="toggle"><input type="checkbox" name="offshore"> Offshore</label><label class="toggle"><input type="checkbox" name="email_enabled" checked> Email</label><label class="toggle"><input type="checkbox" name="dashboard_enabled" checked> Dashboard alerts</label><label class="toggle"><input type="checkbox" name="whatsapp_future"> Future WhatsApp integration</label><button class="button button-gold">Save Alert</button></form></div></section>`;
+  document.querySelector('#alert-form').onsubmit = async (event) => { event.preventDefault(); const form = event.currentTarget; const data = Object.fromEntries(new FormData(form)); data.offshore = form.offshore.checked; data.email_enabled = form.email_enabled.checked; data.dashboard_enabled = form.dashboard_enabled.checked; data.whatsapp_future = form.whatsapp_future.checked; try { await api('/job-alerts', { method: 'POST', body: JSON.stringify(data) }); toast('Job alert created'); setTimeout(() => location.reload(), 500); } catch (error) { toast(error.message, true); } };
+  document.querySelectorAll('[data-delete-alert]').forEach((button) => button.onclick = async () => { try { await api(`/job-alerts/${button.dataset.deleteAlert}`, { method: 'DELETE' }); toast('Alert deleted'); setTimeout(() => location.reload(), 500); } catch (error) { toast(error.message, true); } });
+}
+
+async function renderInterviews() {
+  if (!requireWorkerPage()) return;
+  const { items } = await api('/interviews');
+  const now = Date.now();
+  const upcoming = items.filter((item) => new Date(item.scheduled_at).getTime() >= now);
+  const past = items.filter((item) => new Date(item.scheduled_at).getTime() < now);
+  const itemView = (item) => `<div class="list-item"><div><strong>${escapeHtml(item.interview_title)}</strong><span>${escapeHtml(item.employer_name)} | ${dateText(item.scheduled_at)} | ${escapeHtml(item.status)}</span><span>${escapeHtml(item.employer_note || '')}</span></div>${item.meeting_url ? `<a class="button button-gold" href="${escapeHtml(item.meeting_url)}" target="_blank" rel="noopener noreferrer">Join Meeting</a>` : '<span class="status">Scheduled</span>'}</div>`;
+  app.innerHTML = `<section class="page-section">${pageToolbar('Interviews')}<div class="section-heading"><div><p class="eyebrow">Interview center</p><h1>Interviews</h1></div><p>Upcoming interviews, past interviews, statuses, notes and meeting links.</p></div><div class="dashboard-grid"><section class="glass-panel"><h2>Upcoming Interviews</h2><div class="list">${upcoming.map(itemView).join('') || '<div class="empty compact">No upcoming interviews.</div>'}</div></section><section class="glass-panel"><h2>Past Interviews</h2><div class="list">${past.map(itemView).join('') || '<div class="empty compact">No past interviews.</div>'}</div></section></div></section>`;
+}
+
+async function renderAnalytics() {
+  if (!requireWorkerPage()) return;
+  const { analytics } = await api('/analytics');
+  app.innerHTML = `<section class="page-section">${pageToolbar('Analytics')}<div class="section-heading"><div><p class="eyebrow">Worker analytics</p><h1>Analytics</h1></div><p>Track profile views, employer searches, applications, interviews and profile strength.</p></div><div class="metric-grid"><div class="metric"><strong>${analytics.profile_views}</strong><span>Profile Views</span></div><div class="metric"><strong>${analytics.employer_searches}</strong><span>Employer Searches</span></div><div class="metric"><strong>${analytics.applications}</strong><span>Applications</span></div><div class="metric"><strong>${analytics.interview_rate}%</strong><span>Interview Rate</span></div><div class="metric"><strong>${analytics.profile_strength}%</strong><span>Profile Strength</span></div><div class="metric"><strong>${analytics.response_rate}%</strong><span>Response Rate</span></div></div><section class="glass-panel"><h2>AI Readiness</h2><p>Resume score: ${analytics.ai_resume_score}%. This score is prepared for future AI resume analysis, profile improvement suggestions and skill gap analysis.</p></section></section>`;
+}
+
+async function renderSubscription() {
+  if (!requireWorkerPage()) return;
+  const { subscription } = await api('/subscription');
+  app.innerHTML = `<section class="page-section">${pageToolbar('Subscription')}<div class="section-heading"><div><p class="eyebrow">Subscription</p><h1>Plans</h1></div><p>Prepared for future premium memberships and payment integration.</p></div><div class="plan-grid">${subscription.plans.map((plan) => `<article class="glass-panel plan-card ${plan.current ? 'current' : ''}"><h2>${escapeHtml(plan.name)}</h2><p>${plan.name === 'PREMIUM' ? 'Priority profile visibility, advanced alerts and future AI job matching.' : 'Core worker profile, job applications and document storage.'}</p><span class="status">${plan.current ? 'Current Plan' : 'Available'}</span></article>`).join('')}</div><section class="glass-panel"><h2>Billing History</h2><div class="table-wrap"><table><thead><tr><th>Plan</th><th>Amount</th><th>Status</th><th>Date</th></tr></thead><tbody>${subscription.billing_history.map((item) => `<tr><td>${escapeHtml(item.plan_name)}</td><td>${escapeHtml(item.amount || '')} ${escapeHtml(item.currency)}</td><td>${escapeHtml(item.billing_status)}</td><td>${dateText(item.billing_date)}</td></tr>`).join('') || '<tr><td colspan="4" class="empty-row">No billing records yet.</td></tr>'}</tbody></table></div></section></section>`;
+}
+async function renderCertifications() {
+  if (!requireWorkerPage()) return;
+  const { items } = await api('/certifications');
+  app.innerHTML = `<section class="page-section">${pageToolbar('Documents')}<div class="section-heading"><div><p class="eyebrow">Certificate manager</p><h1>Certifications</h1></div><p>Track certificate numbers, issue dates, expiry dates and verification status.</p></div><div class="dashboard-grid"><section class="glass-panel"><h2>Certificates</h2><div class="table-wrap"><table><thead><tr><th>Certificate</th><th>Number</th><th>Authority</th><th>Issue</th><th>Expiry</th><th>Status</th><th>Action</th></tr></thead><tbody>${items.map((cert) => `<tr><td>${escapeHtml(cert.certificate_name)}</td><td>${escapeHtml(cert.certificate_number || '')}</td><td>${escapeHtml(cert.issuing_authority || '')}</td><td>${dateText(cert.issue_date)}</td><td>${dateText(cert.expiry_date)}</td><td><span class="status">${escapeHtml(cert.verification_status)}</span></td><td><button class="button button-outline" data-delete-cert="${cert.id}">Delete</button></td></tr>`).join('') || '<tr><td colspan="7" class="empty-row">No certificates added yet.</td></tr>'}</tbody></table></div></section><form id="certificate-form" class="glass-panel"><h2>Add Certificate</h2>${field('certificate_name','Certificate Name','','text','required')}${field('certificate_number','Certificate Number')}${field('issuing_authority','Issuing Authority')}${field('issue_date','Issue Date','','date')}${field('expiry_date','Expiry Date','','date')}<button class="button button-gold">Save Certificate</button></form></div></section>`;
+  document.querySelector('#certificate-form').onsubmit = async (event) => { event.preventDefault(); try { await api('/certifications', { method: 'POST', body: JSON.stringify(Object.fromEntries(new FormData(event.currentTarget))) }); toast('Certificate saved'); setTimeout(() => location.reload(), 500); } catch (error) { toast(error.message, true); } };
+  document.querySelectorAll('[data-delete-cert]').forEach((button) => button.onclick = async () => { try { await api(`/certifications/${button.dataset.deleteCert}`, { method: 'DELETE' }); toast('Certificate deleted'); setTimeout(() => location.reload(), 500); } catch (error) { toast(error.message, true); } });
+}
 async function renderJobDetail() {
   const { job } = await api(`/jobs/${encodeURIComponent(identifier)}`);
   app.innerHTML = `<section class="page-section job-detail"><p class="eyebrow">${escapeHtml(job.company)} | ${escapeHtml(job.country)}</p><h1>${escapeHtml(job.title)}</h1><div class="chip-row"><span>${escapeHtml(job.industry)}</span><span>${escapeHtml(job.trade)}</span><span>${escapeHtml(job.job_type)}</span><span>${job.experience_required}+ years</span></div><div class="detail-grid"><article class="glass-panel"><h2>Job Details</h2><p>${escapeHtml(job.description)}</p><h3>Requirements</h3><ul>${job.requirements.map((item) => `<li>${escapeHtml(item)}</li>`).join('') || '<li>Requirements will be confirmed during review.</li>'}</ul></article><aside class="glass-panel"><h2>Opportunity Summary</h2><dl><div><dt>Salary</dt><dd>${money(job.salary_min, job.salary_max, job.currency)}</dd></div><div><dt>Deadline</dt><dd>${dateText(job.deadline)}</dd></div><div><dt>Status</dt><dd>${escapeHtml(statusLabel(job.application_status || 'Not applied'))}</dd></div></dl><div class="toolbar">${currentWorker ? `<button class="button button-gold" data-apply-job="${job.id}">Apply</button><button class="button button-outline" data-save-job="${job.id}">Save Job</button>` : button('Login to Apply','/workers/login','button-gold')}</div></aside></div></section>`;
@@ -332,10 +404,17 @@ async function init() {
     signup: renderSignup,
     dashboard: renderDashboard,
     profile: renderProfile,
-    certifications: () => renderDocuments('Certifications', 'Documents', true),
+    publicProfile: renderPublicProfile,
+    resume: renderResume,
+    skills: renderSkills,
+    certifications: renderCertifications,
     documents: () => renderDocuments('My Documents', 'Documents'),
     applications: renderApplications,
     savedJobs: renderSavedJobs,
+    jobAlerts: renderJobAlerts,
+    interviews: renderInterviews,
+    analytics: renderAnalytics,
+    subscription: renderSubscription,
     notifications: renderNotifications,
     settings: renderSettings,
     job: renderJobDetail,
