@@ -1,4 +1,4 @@
-const header = document.querySelector("[data-header]");
+﻿const header = document.querySelector("[data-header]");
 const menuButton = document.querySelector("[data-menu-toggle]");
 const navigation = document.querySelector("[data-navigation]");
 const year = document.querySelector("#year");
@@ -8,6 +8,8 @@ const projectCards = document.querySelectorAll("[data-category]");
 const lightbox = document.querySelector("[data-lightbox-modal]");
 const lightboxTitle = document.querySelector("[data-lightbox-title]");
 const lightboxClose = document.querySelector("[data-lightbox-close]");
+const workerDropdown = document.querySelector(".nav-dropdown");
+const workerDropdownToggle = document.querySelector(".nav-dropdown-toggle");
 
 if (year) year.textContent = new Date().getFullYear();
 
@@ -25,6 +27,18 @@ if (menuButton && navigation) {
   });
 }
 
+
+if (workerDropdown && workerDropdownToggle) {
+  workerDropdownToggle.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const isOpen = workerDropdown.classList.toggle("is-open");
+    workerDropdownToggle.setAttribute("aria-expanded", String(isOpen));
+  });
+  document.addEventListener("click", () => {
+    workerDropdown.classList.remove("is-open");
+    workerDropdownToggle.setAttribute("aria-expanded", "false");
+  });
+}
 function updateHeader() {
   if (!header) return;
   header.classList.toggle("is-scrolled", window.scrollY > 18);

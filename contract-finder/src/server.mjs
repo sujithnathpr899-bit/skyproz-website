@@ -1,12 +1,14 @@
-import fs from 'node:fs';
+﻿import fs from 'node:fs';
 import path from 'node:path';
 import { createServer } from 'node:http';
 import { config, rootDir, validateProductionConfig } from './config.mjs';
 import { db, migrate } from './db.mjs';
 import { getContract } from './contracts.mjs';
 import { handleApi } from './api.mjs';
+import { handleWorkerApi } from './worker-api.mjs';
 import { runSchedulerJob } from './jobs.mjs';
 import { renderShell } from './views.mjs';
+import { renderWorkerShell } from './worker-views.mjs';
 import { escapeHtml, sendBody, sendHtml, withSecurityHeaders } from './utils.mjs';
 
 validateProductionConfig();
@@ -14,7 +16,9 @@ migrate();
 
 const assets = new Map([
   ['/contract-finder/assets/styles.css', ['styles.css', 'text/css; charset=utf-8']],
-  ['/contract-finder/assets/app.js', ['app.js', 'text/javascript; charset=utf-8']]
+  ['/contract-finder/assets/app.js', ['app.js', 'text/javascript; charset=utf-8']],
+  ['/workers/assets/styles.css', ['worker-styles.css', 'text/css; charset=utf-8']],
+  ['/workers/assets/app.js', ['worker-app.js', 'text/javascript; charset=utf-8']]
 ]);
 
 const companyMimeTypes = new Map([
@@ -65,13 +69,25 @@ export const server = createServer(async (request, response) => {
   const url = new URL(request.url, config.appOrigin);
   try {
     if (serveAsset(request, response, url.pathname)) return;
+    if (await handleWorkerApi(request, response, url)) return;
     if (await handleApi(request, response, url)) return;
     if (url.pathname === '/contract-finder/sitemap.xml') return renderSitemap(request, response);
     if (url.pathname === '/contract-finder/robots.txt') {
       sendBody(response, 200, `User-agent: *\nAllow: /contract-finder/\nSitemap: ${config.appOrigin}/contract-finder/sitemap.xml\n`, { 'content-type': 'text/plain; charset=utf-8' }, request); return;
     }
-    if (!url.pathname.startsWith('/contract-finder') && serveCompanySite(request, response, url.pathname)) return;
+    if (!url.pathname.startsWith('/contract-finder') && !url.pathname.startsWith('/workers') && serveCompanySite(request, response, url.pathname)) return;
     if (url.pathname === '/') { response.writeHead(302, withSecurityHeaders({ location: '/contract-finder/' })); response.end(); return; }
+    const workerJob = url.pathname.match(/^\/workers\/jobs\/([^/]+)$/);
+    if (workerJob) {
+      return sendHtml(response, 200, renderWorkerShell({ page: 'job', identifier: decodeURIComponent(workerJob[1]) }), { 'cache-control': 'public, max-age=60' }, request);
+    }
+    const workerPages = new Map([
+      ['/workers', 'opportunities'], ['/workers/', 'opportunities'], ['/workers/opportunities', 'opportunities'],
+      ['/workers/login', 'login'], ['/workers/signup', 'signup'], ['/workers/dashboard', 'dashboard'],
+      ['/workers/profile', 'profile'], ['/workers/admin', 'admin']
+    ]);
+    const workerPage = workerPages.get(url.pathname);
+    if (workerPage) return sendHtml(response, 200, renderWorkerShell({ page: workerPage }), {}, request);
     const detail = url.pathname.match(/^\/contract-finder\/contracts\/([^/]+)$/);
     if (detail) {
       const contract = getContract(decodeURIComponent(detail[1]));

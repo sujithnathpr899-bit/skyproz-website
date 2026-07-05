@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   --bg: #08111d;
   --bg-soft: #0b1728;
   --panel: #111c2f;
@@ -170,6 +170,61 @@ img { max-width: 100%; display: block; }
 }
 .nav-links a { transition: color .2s ease; }
 .nav-links a:hover, .nav-links a:focus-visible { color: var(--text); }
+.nav-dropdown {
+  position: relative;
+}
+.nav-dropdown-toggle {
+  border: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
+.nav-dropdown-toggle::after {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 7px;
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+}
+.nav-dropdown:hover .nav-dropdown-menu,
+.nav-dropdown:focus-within .nav-dropdown-menu,
+.nav-dropdown.is-open .nav-dropdown-menu {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.nav-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 16px);
+  left: 50%;
+  z-index: 30;
+  display: grid;
+  min-width: 220px;
+  padding: 10px;
+  border: 1px solid var(--line-white);
+  border-radius: 14px;
+  background: rgba(7, 16, 30, .96);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(18px);
+  opacity: 0;
+  transform: translate(-50%, 8px);
+  pointer-events: none;
+  transition: .2s ease;
+}
+.nav-dropdown-menu a {
+  padding: 12px;
+  border-radius: 10px;
+}
+.nav-dropdown-menu a:hover,
+.nav-dropdown-menu a:focus-visible {
+  background: rgba(255, 122, 26, .1);
+}
 .header-actions {
   display: flex;
   align-items: center;
@@ -969,6 +1024,19 @@ address strong { color: var(--text); }
   }
   .nav-links.is-open a { padding: 14px; border-bottom: 1px solid var(--line-white); }
   .nav-links.is-open a:last-child { border-bottom: 0; }
+  .nav-links.is-open .nav-dropdown { border-bottom: 1px solid var(--line-white); }
+  .nav-links.is-open .nav-dropdown-toggle { width: 100%; padding: 14px; text-align: left; }
+  .nav-links.is-open .nav-dropdown-menu {
+    position: static;
+    min-width: 0;
+    margin: 0 8px 10px;
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+    box-shadow: none;
+    background: rgba(255,255,255,.035);
+  }
+  .nav-links.is-open .nav-dropdown-menu a { border-bottom: 0; }
   .hero { grid-template-columns: 1fr; min-height: auto; }
   .dashboard-wrap { max-width: 620px; }
   .stats-strip { grid-template-columns: repeat(3, 1fr); }

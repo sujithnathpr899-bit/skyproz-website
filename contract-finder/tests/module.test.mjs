@@ -1,4 +1,4 @@
-import assert from 'node:assert/strict';
+﻿import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
@@ -19,12 +19,25 @@ const { saveWizardConfiguration, testWizardConfiguration } = await import('../sr
 const { connectorExpansionTemplates } = await import('../src/connectors/template-catalog.mjs');
 const privateRssConnector = (await import('../src/connectors/private-rss.mjs')).default;
 const { buildPortalOpportunity } = await import('../src/connectors/enterprise-portal.mjs');
+const {
+  adminUpdateDocument,
+  adminUpdateWorker,
+  applyToJob,
+  authenticateWorker,
+  createWorker,
+  createWorkerJob,
+  saveJob,
+  searchJobs,
+  updateWorkerProfile,
+  uploadWorkerDocument,
+  workerDashboard
+} = await import('../src/workers.mjs');
 
 migrate();
 
 test('migration creates required contract module tables', () => {
   const names = new Set(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map((row) => row.name));
-  for (const table of ['contracts','contract_sources','saved_searches','user_alerts','user_favorites','contract_categories','watchlists','source_discovery_results','duplicate_merge_runs']) assert.ok(names.has(table), `${table} should exist`);
+  for (const table of ['contracts','contract_sources','saved_searches','user_alerts','user_favorites','contract_categories','watchlists','source_discovery_results','duplicate_merge_runs','workers','worker_documents','worker_jobs','worker_saved_jobs','worker_applications']) assert.ok(names.has(table), `${table} should exist`);
 });
 
 test('password hashes verify without storing plaintext', async () => {
@@ -128,6 +141,65 @@ test('enterprise portal connector creates private vendor registration opportunit
   assert.equal(contract.metadata.procurement_platform, 'ADNOC Supplier Hub');
 });
 
+
+test('worker portal supports registration, jobs, applications and documents', async () => {
+  const worker = await createWorker({
+    full_name: 'Anoop Rope Tech',
+    mobile_number: '+919400000001',
+    email: 'anoop.worker@example.com',
+    country: 'India',
+    nationality: 'Indian',
+    current_location: 'Kerala',
+    date_of_birth: '1992-05-12',
+    passport_number: 'Z1234567',
+    trade_profession: 'Rope Access Technician',
+    years_experience: 6,
+    highest_qualification: 'Diploma',
+    skills: ['Rope Access', 'IRATA Level 2', 'Painting'],
+    password: 'Worker-Password-2026!',
+    confirm_password: 'Worker-Password-2026!'
+  });
+  assert.ok(worker.id);
+  const authenticated = await authenticateWorker('anoop.worker@example.com', 'Worker-Password-2026!');
+  assert.equal(authenticated.id, worker.id);
+  const updated = updateWorkerProfile(worker.id, { availability: 'available in 30 days', preferred_countries: ['UAE', 'Qatar'], preferred_salary: 'USD 2800' });
+  assert.ok(updated.profile_completion >= worker.profile_completion);
+
+  const job = createWorkerJob({
+    title: 'Rope Access Painter',
+    company: 'Skyproz Test Mobilisation',
+    country: 'Qatar',
+    industry: 'Oil & Gas',
+    trade: 'Rope Access',
+    job_type: 'Shutdown',
+    salary_min: 2000,
+    salary_max: 3200,
+    currency: 'USD',
+    experience_required: 3,
+    description: 'Industrial rope access painting support.',
+    requirements: ['IRATA certificate', 'Painting experience']
+  });
+  const jobs = searchJobs({ country: 'Qatar', trade: 'Rope Access' }, worker.id);
+  assert.equal(jobs.pagination.total, 1);
+  assert.equal(jobs.items[0].id, job.id);
+  saveJob(worker.id, job.id);
+  applyToJob(worker.id, job.id, 'Ready for mobilisation.');
+
+  const document = uploadWorkerDocument(worker.id, {
+    document_type: 'CV / Resume',
+    filename: 'anoop-cv.pdf',
+    content_type: 'application/pdf',
+    content_base64: Buffer.from('%PDF-1.4 worker cv').toString('base64')
+  });
+  assert.equal(document.status, 'pending');
+  const approved = adminUpdateDocument(document.id, { status: 'approved', reviewer_note: 'Verified sample document' });
+  assert.equal(approved.status, 'approved');
+  assert.equal(adminUpdateWorker(worker.id, { profile_verified: true }).profile_verified, true);
+  const dashboard = workerDashboard(worker.id);
+  assert.equal(dashboard.counts.saved_jobs, 1);
+  assert.equal(dashboard.counts.applied_jobs, 1);
+  assert.equal(dashboard.counts.uploaded_documents, 1);
+});
 test('connector manager tests, imports and logs a live RSS source', async () => {
   const rss = `<?xml version="1.0" encoding="UTF-8"?>
     <rss version="2.0"><channel><title>Mock Procurement</title><item>

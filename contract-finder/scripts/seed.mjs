@@ -1,6 +1,7 @@
-import { migrate, db } from '../src/db.mjs';
+﻿import { migrate, db } from '../src/db.mjs';
 import { hashPassword } from '../src/auth.mjs';
 import { createContract } from '../src/contracts.mjs';
+import { createWorkerJob } from '../src/workers.mjs';
 
 migrate();
 
@@ -229,4 +230,51 @@ if (!db.prepare('SELECT id FROM contracts LIMIT 1').get()) {
   });
 }
 
+if (!db.prepare('SELECT id FROM worker_jobs LIMIT 1').get()) {
+  createWorkerJob({
+    title: 'IRATA Rope Access Technicians',
+    company: 'Skyproz Global Mobilisation',
+    country: 'United Arab Emirates',
+    industry: 'Oil & Gas',
+    trade: 'Rope Access',
+    job_type: 'Shutdown Project',
+    salary_min: 2200,
+    salary_max: 3600,
+    currency: 'USD',
+    experience_required: 2,
+    description: 'Rope access technicians required for refinery maintenance, inspection support and work-at-height activities during planned shutdown operations.',
+    requirements: ['Valid IRATA certificate', 'Industrial maintenance experience', 'Valid passport', 'Medical fitness certificate'],
+    deadline: '2026-09-15T12:00:00.000Z'
+  });
+  createWorkerJob({
+    title: 'Wind Turbine Blade Inspection Team',
+    company: 'Skyproz Renewable Services',
+    country: 'Germany',
+    industry: 'Wind Energy',
+    trade: 'Wind Turbine',
+    job_type: 'Contract',
+    salary_min: 2800,
+    salary_max: 4400,
+    currency: 'EUR',
+    experience_required: 3,
+    description: 'Experienced wind turbine inspection workers required for blade visual inspection, documentation and preventive maintenance support.',
+    requirements: ['Wind turbine experience', 'Rope access or blade access certification', 'Inspection reporting skills', 'Availability for travel'],
+    deadline: '2026-10-01T12:00:00.000Z'
+  });
+  createWorkerJob({
+    title: 'Marine Mechanical Maintenance Crew',
+    company: 'Skyproz Marine Support',
+    country: 'Singapore',
+    industry: 'Marine',
+    trade: 'Mechanical',
+    job_type: 'Project',
+    salary_min: 1800,
+    salary_max: 3200,
+    currency: 'USD',
+    experience_required: 4,
+    description: 'Mechanical maintenance workers required for shipyard and offshore support activities including pumps, valves, steel structures and machinery assistance.',
+    requirements: ['Marine or shipyard experience', 'Trade certificate', 'Permit-to-work awareness', 'English communication'],
+    deadline: '2026-08-30T12:00:00.000Z'
+  });
+}
 console.log('Seed complete. Demo credentials are documented in README.md; change them before any public deployment.');
