@@ -657,6 +657,178 @@ img { max-width: 100%; display: block; }
   font-weight: 800;
 }
 
+.building-maintenance-section {
+  position: relative;
+}
+.building-maintenance-section::before {
+  content: "";
+  position: absolute;
+  inset: 7% -6% auto auto;
+  width: 300px;
+  height: 300px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(255, 122, 26, .2), transparent 68%);
+  pointer-events: none;
+}
+.maintenance-showcase {
+  display: grid;
+  grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr);
+  gap: 18px;
+  align-items: stretch;
+}
+.maintenance-intro,
+.maintenance-services-panel,
+.building-industries {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--line-white);
+  border-radius: 24px;
+  background: linear-gradient(145deg, rgba(17, 28, 47, .96), rgba(8, 17, 29, .94));
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .22);
+}
+.maintenance-intro,
+.maintenance-services-panel {
+  padding: clamp(24px, 3vw, 34px);
+}
+.maintenance-intro::after {
+  content: "";
+  position: absolute;
+  right: -80px;
+  bottom: -110px;
+  width: 250px;
+  height: 250px;
+  border: 1px solid rgba(255, 122, 26, .18);
+  border-radius: 50%;
+  background: rgba(255, 122, 26, .055);
+}
+.maintenance-intro > * {
+  position: relative;
+  z-index: 1;
+}
+.maintenance-kicker {
+  display: inline-flex;
+  margin-bottom: 16px;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 122, 26, .24);
+  border-radius: 999px;
+  color: var(--gold);
+  background: rgba(255, 122, 26, .08);
+  font-size: .72rem;
+  font-weight: 900;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.maintenance-intro h3,
+.maintenance-services-panel h3,
+.section-subheading h3 {
+  margin-bottom: 14px;
+  font-size: clamp(1.65rem, 3vw, 2.35rem);
+}
+.maintenance-intro p,
+.maintenance-services-panel p,
+.section-subheading p {
+  color: var(--muted);
+}
+.maintenance-highlights {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 24px;
+}
+.maintenance-highlights span {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 54px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 14px;
+  color: rgba(255, 255, 255, .86);
+  background: rgba(255, 255, 255, .04);
+  font-size: .84rem;
+  font-weight: 800;
+}
+.maintenance-highlights svg,
+.building-industry-card svg {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  color: var(--orange);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.maintenance-cta {
+  margin-top: 26px;
+}
+.maintenance-service-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 22px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.maintenance-service-list li {
+  position: relative;
+  min-height: 44px;
+  padding: 12px 14px 12px 34px;
+  border: 1px solid rgba(255, 255, 255, .075);
+  border-radius: 13px;
+  color: rgba(255, 255, 255, .8);
+  background: rgba(255, 255, 255, .035);
+  font-size: .84rem;
+  font-weight: 750;
+}
+.maintenance-service-list li::before {
+  content: "";
+  position: absolute;
+  top: 18px;
+  left: 15px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--orange);
+  box-shadow: 0 0 18px rgba(255, 122, 26, .75);
+}
+.building-industries {
+  margin-top: 18px;
+  padding: clamp(24px, 3vw, 32px);
+}
+.section-subheading {
+  display: grid;
+  gap: 6px;
+  max-width: 760px;
+  margin-bottom: 22px;
+}
+.building-industry-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+.building-industry-card {
+  min-height: 124px;
+  display: grid;
+  align-content: space-between;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, .075);
+  border-radius: 16px;
+  background: linear-gradient(150deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .02));
+  transition: transform .25s ease, border-color .25s ease, background .25s ease;
+}
+.building-industry-card:hover {
+  transform: translateY(-5px);
+  border-color: rgba(255, 122, 26, .34);
+  background: linear-gradient(150deg, rgba(255, 122, 26, .1), rgba(255, 255, 255, .03));
+}
+.building-industry-card h4 {
+  font-size: .95rem;
+  line-height: 1.25;
+}
+
 .why-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -1144,6 +1316,8 @@ address strong { color: var(--text); }
   .dashboard-wrap { max-width: 620px; }
   .stats-strip { grid-template-columns: repeat(3, 1fr); }
   .service-grid, .industry-grid, .project-grid { grid-template-columns: repeat(2, 1fr); }
+  .maintenance-showcase { grid-template-columns: 1fr; }
+  .building-industry-grid { grid-template-columns: repeat(3, 1fr); }
   .trust-grid { grid-template-columns: repeat(2, 1fr); }
   .process-grid { grid-template-columns: repeat(2, 1fr); }
   .why-grid { grid-template-columns: repeat(2, 1fr); }
@@ -1167,6 +1341,8 @@ address strong { color: var(--text); }
   .operation-list div { grid-template-columns: 38px 1fr; }
   .operation-list em { grid-column: 2; }
   .stats-strip, .trust-grid, .service-grid, .industry-grid, .project-grid, .process-grid, .why-grid, .safety-grid, .openings-grid, .enquiry-form, .footer-grid { grid-template-columns: 1fr; }
+  .maintenance-highlights, .maintenance-service-list, .building-industry-grid { grid-template-columns: 1fr; }
+  .building-industry-card { min-height: 96px; }
   .stat-card { border-right: 0; border-bottom: 1px solid var(--line-white); }
   .contract-section { padding: 28px; border-radius: 20px; }
   .before-after { grid-template-columns: 1fr; }
