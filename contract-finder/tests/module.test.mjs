@@ -11,7 +11,17 @@ process.env.SESSION_SECRET = 'test-secret-with-more-than-thirty-two-characters';
 
 const { migrate, db } = await import('../src/db.mjs');
 const { createContract, searchContracts, updateContract, removeDuplicateContracts } = await import('../src/contracts.mjs');
-const { hashPassword, verifyPassword } = await import('../src/auth.mjs');
+const { createSession, hashPassword, sessionCookie, verifyPassword } = await import('../src/auth.mjs');
+const { handleApi } = await import('../src/api.mjs');
+const {
+  createPrivateOpportunity,
+  createPrivateSource,
+  getPrivateOpportunity,
+  importPrivateSource,
+  privateOpportunityDashboard,
+  searchPrivateOpportunities,
+  testPrivateSource
+} = await import('../src/private-opportunities.mjs');
 const { analyzeOpportunity, listKeywords } = await import('../src/services/procurement-bot.mjs');
 const { connectorLogs, connectorStatus, importSource, testSourceConnection } = await import('../src/services/importer.mjs');
 const { inferFieldMappingFromSamples, marketplaceSnapshot, runSourceDiscovery } = await import('../src/services/source-discovery.mjs');
@@ -46,7 +56,7 @@ migrate();
 
 test('migration creates required contract module tables', () => {
   const names = new Set(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map((row) => row.name));
-  for (const table of ['contracts','contract_sources','saved_searches','user_alerts','user_favorites','contract_categories','watchlists','source_discovery_results','duplicate_merge_runs','workers','worker_documents','worker_jobs','worker_saved_jobs','worker_applications']) assert.ok(names.has(table), `${table} should exist`);
+  for (const table of ['contracts','contract_sources','saved_searches','user_alerts','user_favorites','contract_categories','watchlists','source_discovery_results','duplicate_merge_runs','workers','worker_documents','worker_jobs','worker_saved_jobs','worker_applications','private_opportunities','private_opportunity_sources','private_opportunity_source_logs']) assert.ok(names.has(table), `${table} should exist`);
 });
 
 test('password hashes verify without storing plaintext', async () => {
@@ -148,6 +158,114 @@ test('enterprise portal connector creates private vendor registration opportunit
   assert.equal(contract.source_url, 'https://supplierhub.adnoc.ae/landing');
   assert.ok(contract.tags.includes('Private Enterprise'));
   assert.equal(contract.metadata.procurement_platform, 'ADNOC Supplier Hub');
+});
+
+test('private opportunities support admin-only building maintenance pipeline', async () => {
+  const feed = {
+    items: [
+      {
+        id: 'private-100',
+        company: 'Metro Mall Facilities',
+        title: 'AMC for high rise glass cleaning and facade maintenance',
+        description: 'Public RFQ for rope access, glass cleaning, facade repairs, waterproofing and annual maintenance services.',
+        url: 'https://example.test/private/rfq-100',
+        country: 'India',
+        state: 'Kerala',
+        city: 'Kochi',
+        industry: 'Shopping Malls',
+        deadline: '2026-09-20',
+        budget_value: 1200000,
+        currency: 'INR'
+      }
+    ]
+  };
+  const server = http.createServer((request, response) => {
+    response.writeHead(200, { 'content-type': 'application/json' });
+    response.end(JSON.stringify(feed));
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const endpoint = `http://127.0.0.1:${server.address().port}/opportunities.json`;
+    const source = createPrivateSource({
+      name: 'Metro Mall Public RFQ Feed',
+      source_type: 'json',
+      source_url: 'https://example.test/private',
+      endpoint_url: endpoint,
+      country: 'India',
+      state: 'Kerala',
+      city: 'Kochi',
+      industry: 'Shopping Malls',
+      is_active: true,
+      parser_config: {
+        parser_type: 'json',
+        items_path: 'items',
+        field_map: {
+          external_id: 'id',
+          company: 'company',
+          title: 'title',
+          description: 'description',
+          source_url: 'url',
+          country: 'country',
+          state: 'state',
+          city: 'city',
+          industry: 'industry',
+          deadline: 'deadline',
+          budget_value: 'budget_value',
+          currency: 'currency'
+        }
+      }
+    });
+    const testResult = await testPrivateSource(source.id);
+    assert.equal(testResult.ok, true);
+    assert.equal(testResult.sample_opportunities.length, 1);
+    const importResult = await importPrivateSource(source.id);
+    assert.equal(importResult.imported, 1);
+    assert.equal(importResult.failures.length, 0);
+    const search = searchPrivateOpportunities({ service: 'Rope Access', page_size: 100 });
+    assert.equal(search.pagination.total, 1);
+    assert.ok(search.items[0].match_score >= 70);
+    assert.ok(search.items[0].required_services.includes('Glass Cleaning'));
+    const detail = getPrivateOpportunity(search.items[0].slug);
+    assert.equal(detail.company, 'Metro Mall Facilities');
+    assert.equal(detail.original_source_url, 'https://example.test/private/rfq-100');
+    assert.ok(detail.required_certifications.includes('IRATA Rope Access Certification'));
+    const dashboard = privateOpportunityDashboard();
+    assert.ok(dashboard.total_opportunities >= 1);
+    assert.ok(dashboard.amc_opportunities >= 1);
+    assert.ok(dashboard.rope_access_opportunities >= 1);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('private opportunities API is admin only', async () => {
+  const userId = db.prepare(`INSERT INTO users(email, password_hash, display_name, role, plan)
+    VALUES (?, ?, ?, 'user', 'free')`).run('private-user@example.com', 'test', 'Private User').lastInsertRowid;
+  const adminId = db.prepare(`INSERT INTO users(email, password_hash, display_name, role, plan)
+    VALUES (?, ?, ?, 'admin', 'premium')`).run('private-admin@example.com', 'test', 'Private Admin').lastInsertRowid;
+  const userSession = createSession(Number(userId));
+  const adminSession = createSession(Number(adminId));
+  const userCookie = sessionCookie(userSession.value, userSession.expiresAt).split(';')[0];
+  const adminCookie = sessionCookie(adminSession.value, adminSession.expiresAt).split(';')[0];
+  const server = http.createServer(async (request, response) => {
+    const handled = await handleApi(request, response, new URL(request.url, 'http://127.0.0.1'));
+    if (!handled) { response.writeHead(404); response.end(); }
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const publicResponse = await fetch(`${base}/api/contract-finder/admin/private-opportunities`);
+    assert.equal(publicResponse.status, 401);
+    const userResponse = await fetch(`${base}/api/contract-finder/admin/private-opportunities`, { headers: { cookie: userCookie } });
+    assert.equal(userResponse.status, 403);
+    const adminResponse = await fetch(`${base}/api/contract-finder/admin/private-opportunities`, { headers: { cookie: adminCookie } });
+    assert.equal(adminResponse.status, 200);
+    const payload = await adminResponse.json();
+    assert.ok(payload.dashboard);
+    assert.ok(payload.opportunities);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
 });
 
 

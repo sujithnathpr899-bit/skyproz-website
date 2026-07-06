@@ -3,6 +3,7 @@ import path from 'node:path';
 import { createServer } from 'node:http';
 import { config, rootDir, validateProductionConfig } from './config.mjs';
 import { db, migrate } from './db.mjs';
+import { requireAdmin } from './auth.mjs';
 import { getContract } from './contracts.mjs';
 import { handleApi } from './api.mjs';
 import { handleWorkerApi } from './worker-api.mjs';
@@ -106,6 +107,11 @@ export const server = createServer(async (request, response) => {
       if (!contract) return sendHtml(response, 404, renderShell({ page: 'not-found' }), {}, request);
       return sendHtml(response, 200, renderShell({ page: 'contract', identifier: detail[1], contract }), { 'cache-control': 'public, max-age=60' }, request);
     }
+    const privateOpportunityDetail = url.pathname.match(/^\/contract-finder\/admin\/private-opportunities\/([^/]+)$/);
+    if (privateOpportunityDetail) {
+      requireAdmin(request);
+      return sendHtml(response, 200, renderShell({ page: 'privateOpportunity', identifier: decodeURIComponent(privateOpportunityDetail[1]) }), { 'cache-control': 'no-store' }, request);
+    }
     const pages = new Map([
       ['/contract-finder/', 'home'], ['/contract-finder', 'home'], ['/contract-finder/search', 'search'],
       ['/contract-finder/contracts', 'contracts'], ['/contract-finder/contracts/', 'contracts'],
@@ -116,6 +122,8 @@ export const server = createServer(async (request, response) => {
       ['/contract-finder/admin/source-discovery', 'sourceDiscovery'],
       ['/contract-finder/admin/connector-wizard', 'connectorWizard'],
       ['/contract-finder/admin/marketplace', 'marketplace'],
+      ['/contract-finder/admin/private-opportunities', 'privateOpportunities'],
+      ['/contract-finder/admin/private-opportunities/', 'privateOpportunities'],
       ['/admin/connectors', 'connectors'],
       ['/admin/source-discovery', 'sourceDiscovery'],
       ['/admin/connector-wizard', 'connectorWizard'],
@@ -123,10 +131,16 @@ export const server = createServer(async (request, response) => {
       ['/contract-finder/login', 'login']
     ]);
     const page = pages.get(url.pathname);
-    if (page) return sendHtml(response, 200, renderShell({ page }), {}, request);
+    if (page) {
+      if (page === 'privateOpportunities') requireAdmin(request);
+      return sendHtml(response, 200, renderShell({ page }), page === 'privateOpportunities' ? { 'cache-control': 'no-store' } : {}, request);
+    }
     return sendHtml(response, 404, renderShell({ page: 'not-found' }), {}, request);
   } catch (error) {
     console.error(error);
+    if (error.status === 401 || error.status === 403) {
+      sendHtml(response, error.status, `<h1>${error.status === 401 ? 'Authentication Required' : 'Administrator Access Required'}</h1><p>${escapeHtml(error.message)}</p>`, { 'cache-control': 'no-store' }, request); return;
+    }
     sendHtml(response, 500, '<h1>Contract Finder error</h1><p>Please try again.</p>', {}, request);
   }
 });

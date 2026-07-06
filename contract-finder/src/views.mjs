@@ -14,6 +14,8 @@ const pageMeta = {
   sourceDiscovery: ['Source Discovery | Skyproz', 'Discover official procurement APIs, feeds, authentication and field mappings.'],
   connectorWizard: ['Connector Wizard | Skyproz', 'Guided setup for official procurement connector APIs and public feeds.'],
   marketplace: ['Connector Marketplace | Skyproz', 'Review procurement connector coverage and install supported official sources.'],
+  privateOpportunities: ['Private Opportunities | Skyproz', 'Admin-only private building maintenance opportunity management.'],
+  privateOpportunity: ['Private Opportunity Detail | Skyproz', 'Admin-only private opportunity intelligence and source details.'],
   login: ['Sign In | Skyproz Contract Finder', 'Sign in to save contracts and create opportunity alerts.']
 };
 
@@ -21,7 +23,7 @@ export function renderShell({ page = 'home', identifier = '', contract = null } 
   const [defaultTitle, defaultDescription] = pageMeta[page] || pageMeta.home;
   const title = contract ? `${contract.title} | Skyproz Contract Finder` : defaultTitle;
   const description = contract ? String(contract.description).slice(0, 155) : defaultDescription;
-  const privatePage = ['dashboard','favorites','saved','alerts','watchlists','admin','connectors','sourceDiscovery','connectorWizard','marketplace','login'].includes(page);
+  const privatePage = ['dashboard','favorites','saved','alerts','watchlists','admin','connectors','sourceDiscovery','connectorWizard','marketplace','privateOpportunities','privateOpportunity','login'].includes(page);
   const canonical = contract ? `${config.appOrigin}/contract-finder/contracts/${contract.slug}` : `${config.appOrigin}/contract-finder/${page === 'home' ? '' : page}`;
   const structuredData = contract ? {
     '@context': 'https://schema.org', '@type': 'GovernmentService', name: contract.title,

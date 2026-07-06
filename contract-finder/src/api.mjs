@@ -8,6 +8,21 @@ import { botStatus, createKeyword, deleteKeyword, listKeywords, runProcurementBo
 import { importAnalytics, marketplaceSnapshot, runSourceDiscovery } from './services/source-discovery.mjs';
 import { connectorWizardSnapshot, detectWizardSource, saveWizardConfiguration, testWizardConfiguration } from './services/connector-wizard.mjs';
 import { generateAnalyticsSnapshot, runSchedulerJob, schedulerHealth } from './jobs.mjs';
+import {
+  createPrivateOpportunity,
+  createPrivateSource,
+  deletePrivateSource,
+  getPrivateOpportunity,
+  importPrivateSource,
+  listPrivateSources,
+  privateFilterOptions,
+  privateOpportunityDashboard,
+  privateSourceLogs,
+  searchPrivateOpportunities,
+  testPrivateSource,
+  updatePrivateOpportunity,
+  updatePrivateSource
+} from './private-opportunities.mjs';
 import { readJson, sendJson } from './utils.mjs';
 
 function match(pathname, pattern) {
@@ -210,6 +225,68 @@ export async function handleApi(request, response, url) {
 
     if (pathname.startsWith('/api/contract-finder/admin/')) {
       const adminUser = requireAdmin(request);
+      if (request.method === 'GET' && pathname === '/api/contract-finder/admin/private-opportunities') {
+        sendJson(response, 200, {
+          dashboard: privateOpportunityDashboard(),
+          filters: privateFilterOptions(),
+          opportunities: searchPrivateOpportunities(queryObject(searchParams))
+        }); return true;
+      }
+      if (request.method === 'GET' && pathname === '/api/contract-finder/admin/private-opportunities/options') {
+        sendJson(response, 200, privateFilterOptions()); return true;
+      }
+      if (request.method === 'GET' && pathname === '/api/contract-finder/admin/private-opportunities/sources') {
+        sendJson(response, 200, { items: listPrivateSources() }); return true;
+      }
+      if (request.method === 'POST' && pathname === '/api/contract-finder/admin/private-opportunities/sources') {
+        const source = createPrivateSource(await readJson(request));
+        auditLog(adminUser, request, 'private_opportunity.source.create', 'private_opportunity_sources', source.id, { name: source.name });
+        sendJson(response, 201, { source }); return true;
+      }
+      let privateRoute = match(pathname, /^\/api\/contract-finder\/admin\/private-opportunities\/sources\/(\d+)$/);
+      if (privateRoute && request.method === 'PATCH') {
+        const source = updatePrivateSource(Number(privateRoute[0]), await readJson(request));
+        auditLog(adminUser, request, 'private_opportunity.source.update', 'private_opportunity_sources', privateRoute[0], { name: source.name });
+        sendJson(response, 200, { source }); return true;
+      }
+      if (privateRoute && request.method === 'DELETE') {
+        deletePrivateSource(Number(privateRoute[0]));
+        auditLog(adminUser, request, 'private_opportunity.source.delete', 'private_opportunity_sources', privateRoute[0], {});
+        sendJson(response, 200, { ok: true }); return true;
+      }
+      privateRoute = match(pathname, /^\/api\/contract-finder\/admin\/private-opportunities\/sources\/(\d+)\/test$/);
+      if (privateRoute && request.method === 'POST') {
+        const result = await testPrivateSource(Number(privateRoute[0]));
+        auditLog(adminUser, request, 'private_opportunity.source.test', 'private_opportunity_sources', privateRoute[0], { ok: result.ok, http_status: result.http_status });
+        sendJson(response, 200, result); return true;
+      }
+      privateRoute = match(pathname, /^\/api\/contract-finder\/admin\/private-opportunities\/sources\/(\d+)\/import$/);
+      if (privateRoute && request.method === 'POST') {
+        const result = await importPrivateSource(Number(privateRoute[0]));
+        auditLog(adminUser, request, 'private_opportunity.source.import', 'private_opportunity_sources', privateRoute[0], result);
+        sendJson(response, 200, result); return true;
+      }
+      privateRoute = match(pathname, /^\/api\/contract-finder\/admin\/private-opportunities\/sources\/(\d+)\/logs$/);
+      if (privateRoute && request.method === 'GET') {
+        sendJson(response, 200, { items: privateSourceLogs(Number(privateRoute[0]), searchParams.get('limit') || 50) }); return true;
+      }
+      if (request.method === 'POST' && pathname === '/api/contract-finder/admin/private-opportunities') {
+        const opportunity = createPrivateOpportunity(await readJson(request));
+        auditLog(adminUser, request, 'private_opportunity.create', 'private_opportunities', opportunity.id, { company: opportunity.company });
+        sendJson(response, 201, { opportunity }); return true;
+      }
+      privateRoute = match(pathname, /^\/api\/contract-finder\/admin\/private-opportunities\/([^/]+)$/);
+      if (privateRoute && request.method === 'GET') {
+        const opportunity = getPrivateOpportunity(decodeURIComponent(privateRoute[0]));
+        if (!opportunity) throw Object.assign(new Error('Private opportunity not found'), { status: 404 });
+        sendJson(response, 200, { opportunity }); return true;
+      }
+      if (privateRoute && request.method === 'PATCH') {
+        const opportunity = updatePrivateOpportunity(Number(privateRoute[0]), await readJson(request));
+        if (!opportunity) throw Object.assign(new Error('Private opportunity not found'), { status: 404 });
+        auditLog(adminUser, request, 'private_opportunity.update', 'private_opportunities', privateRoute[0], {});
+        sendJson(response, 200, { opportunity }); return true;
+      }
       if (request.method === 'GET' && pathname === '/api/contract-finder/admin/analytics') {
         const analytics = {
           contracts: db.prepare('SELECT COUNT(*) AS value FROM contracts').get().value,
