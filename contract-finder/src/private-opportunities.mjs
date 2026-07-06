@@ -23,7 +23,14 @@ const SERVICE_RULES = [
 
 const TARGET_INDUSTRIES = [
   'Commercial Buildings', 'Shopping Malls', 'Hospitals', 'Hotels', 'Apartments', 'IT Parks',
-  'Warehouses', 'Manufacturing Plants', 'Airports', 'Banks', 'Retail Chains', 'Educational Institutions'
+  'Warehouses', 'Manufacturing', 'Manufacturing Plants', 'Facility Management Companies',
+  'Property Developers', 'Airports', 'Banks', 'Retail Chains', 'Educational Institutions'
+];
+
+const LEAD_FINDER_CATEGORIES = [
+  'Commercial Buildings', 'Shopping Malls', 'Hospitals', 'Hotels', 'IT Parks', 'Apartments',
+  'Warehouses', 'Manufacturing', 'Facility Management Companies', 'Property Developers',
+  'Vendor Registration'
 ];
 
 const SOURCE_TYPES = new Set(['procurement_portal', 'vendor_registration', 'rfq_page', 'rfp_page', 'tender_page', 'rss', 'json', 'xml', 'csv']);
@@ -257,6 +264,18 @@ export function searchPrivateOpportunities(filters = {}) {
     if (filters[key]) { where.push(`${column} = ?`); values.push(String(filters[key])); }
   }
   if (filters.service) { where.push('p.required_services_json LIKE ?'); values.push(`%${String(filters.service)}%`); }
+  if (filters.lead_category) {
+    const category = String(filters.lead_category);
+    if (category === 'Vendor Registration') {
+      where.push(`(p.vendor_registration_url IS NOT NULL OR p.source_id IN (
+        SELECT id FROM private_opportunity_sources WHERE source_type = 'vendor_registration'
+      ) OR p.title LIKE ? OR p.description LIKE ?)`);
+      values.push('%vendor registration%', '%vendor registration%');
+    } else {
+      where.push('(p.industry = ? OR p.building_type = ? OR p.description LIKE ?)');
+      values.push(category, category, `%${category}%`);
+    }
+  }
   if (filters.source_id) { where.push('p.source_id = ?'); values.push(Number(filters.source_id)); }
   if (filters.min_budget !== undefined && filters.min_budget !== '') { where.push('p.budget_value >= ?'); values.push(Number(filters.min_budget)); }
   if (filters.max_budget !== undefined && filters.max_budget !== '') { where.push('p.budget_value <= ?'); values.push(Number(filters.max_budget)); }
@@ -300,6 +319,7 @@ export function privateFilterOptions() {
     statuses: distinct('status'),
     services: SERVICE_RULES.map(([service]) => service),
     sources: db.prepare('SELECT id, name, source_type, country FROM private_opportunity_sources ORDER BY name').all(),
+    lead_categories: LEAD_FINDER_CATEGORIES,
     target_industries: TARGET_INDUSTRIES
   };
 }

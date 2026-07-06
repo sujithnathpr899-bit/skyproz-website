@@ -242,6 +242,12 @@ td small { display: block; margin-top: 4px; color: var(--muted); font-size: .66r
 .connector-actions { display: grid; grid-template-columns: repeat(3,1fr); gap: 4px; margin-top: auto; }
 .connector-actions .button { min-height: 28px; padding: 0 5px; font-size: .56rem; }
 .panel .dense-table-wrap { max-height: 360px; }
+.lead-finder-panel { margin-bottom: 8px; }
+.lead-category-grid { display: grid; grid-template-columns: repeat(6,minmax(130px,1fr)); gap: 8px; }
+.lead-category-card { display: flex; align-items: center; gap: 10px; min-height: 58px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: rgba(255,255,255,.028); transition: .2s; }
+.lead-category-card:hover,.lead-category-card.is-active { transform: translateY(-2px); border-color: rgba(245,168,0,.38); background: rgba(245,168,0,.08); }
+.lead-category-card span { display: grid; flex: 0 0 34px; place-items: center; width: 34px; height: 34px; border-radius: 7px; color: var(--navy); background: linear-gradient(135deg,var(--gold),var(--orange)); font-family: "Barlow Condensed"; font-weight: 800; }
+.lead-category-card strong { color: var(--white); font-size: .75rem; line-height: 1.2; text-transform: uppercase; }
 #toast { position: fixed; right: 22px; bottom: 22px; z-index: 100; max-width: 350px; padding: 14px 18px; border-radius: 6px; color: var(--navy); background: var(--success); box-shadow: var(--shadow); font-size: .82rem; font-weight: 700; opacity: 0; transform: translateY(20px); pointer-events: none; transition: .25s; }
 #toast.show { opacity: 1; transform: translateY(0); }
 #toast.error-toast { color: white; background: var(--danger); }
@@ -297,6 +303,7 @@ footer p:last-child { margin-left: auto; }
   .dashboard-metrics { grid-template-columns: repeat(3,1fr); }
   .dashboard-dense-grid.second-row,.dashboard-dense-grid.third-row { grid-template-columns: 1fr; }
   .filter-drawer .filters { grid-template-columns: repeat(3,minmax(130px,1fr)); }
+  .lead-category-grid { grid-template-columns: repeat(3,minmax(130px,1fr)); }
 }
 @media (max-width: 760px) {
   .dense-page { padding-inline: 10px; }
@@ -306,6 +313,7 @@ footer p:last-child { margin-left: auto; }
   .dense-connector-grid { grid-template-columns: repeat(2,minmax(130px,1fr)); }
   .dashboard-metrics { grid-template-columns: repeat(2,1fr); }
   .filter-drawer .filters { grid-template-columns: 1fr; }
+  .lead-category-grid { grid-template-columns: 1fr 1fr; }
   .filter-drawer .field-row { grid-template-columns: 1fr; }
   .contract-intel-grid { grid-template-columns: 1fr; }
   .dense-table { min-width: 920px; }

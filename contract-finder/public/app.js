@@ -241,7 +241,7 @@ function bindServerSort(root, basePath) {
 function dashboardNav() {
   return `<nav class="dashboard-nav" aria-label="Contract Finder dashboard">
     ${button('Overview','/contract-finder/dashboard','button-ghost')}
-    ${currentUser?.role === 'admin' ? button('Government Contracts','/contract-finder/admin','button-ghost') + button('Private Opportunities','/contract-finder/admin/private-opportunities','button-ghost') : ''}
+    ${currentUser?.role === 'admin' ? button('Government Contracts','/contract-finder/admin','button-ghost') + button('Lead Finder','/contract-finder/admin/lead-finder','button-ghost') : ''}
     ${button('Contracts','/contract-finder/contracts','button-ghost')}
     ${button('Favorites','/contract-finder/favorites','button-ghost')}
     ${button('Saved Searches','/contract-finder/saved-searches','button-ghost')}
@@ -1213,11 +1213,30 @@ function privateMetricGrid(dashboard = {}) {
   return metrics.map(([label, value]) => `<div class="metric"><strong>${escapeHtml(value)}</strong><span>${escapeHtml(label)}</span></div>`).join('');
 }
 
-function privateRows(items = []) {
+function leadFinderBasePath() {
+  return location.pathname.startsWith('/contract-finder/admin/private-opportunities')
+    ? '/contract-finder/admin/private-opportunities'
+    : '/contract-finder/admin/lead-finder';
+}
+
+function leadCategoryCards(filters = {}, params = new URLSearchParams(), basePath = leadFinderBasePath()) {
+  const labels = ['CB','SM','HS','HT','IT','AP','WH','MF','FM','PD','VR'];
+  return `<div class="lead-category-grid">${(filters.lead_categories || []).map((category, index) => {
+    const query = new URLSearchParams(params);
+    query.set('lead_category', category);
+    query.set('page', '1');
+    return `<a class="lead-category-card ${params.get('lead_category') === category ? 'is-active' : ''}" href="${basePath}?${query}">
+      <span>${labels[index] || 'LD'}</span>
+      <strong>${escapeHtml(category)}</strong>
+    </a>`;
+  }).join('')}</div>`;
+}
+
+function privateRows(items = [], basePath = leadFinderBasePath()) {
   return items.map((item) => `<tr tabindex="0">
     <td data-col="score"><span class="score-pill">${item.match_score || 0}</span></td>
     <td data-col="company"><strong>${escapeHtml(compactText(item.company, 34))}</strong></td>
-    <td data-col="opportunity"><a href="/contract-finder/admin/private-opportunities/${encodeURIComponent(item.slug)}">${escapeHtml(compactText(item.title, 58))}</a><small>${escapeHtml(compactText(item.building_type || item.win_probability || '', 34))}</small></td>
+    <td data-col="opportunity"><a href="${basePath}/${encodeURIComponent(item.slug)}">${escapeHtml(compactText(item.title, 58))}</a><small>${escapeHtml(compactText(item.building_type || item.win_probability || '', 34))}</small></td>
     <td data-col="service">${escapeHtml(compactText((item.required_services || []).join(', '), 42))}</td>
     <td data-col="industry">${escapeHtml(compactText(item.industry || '-', 30))}</td>
     <td data-col="country">${escapeHtml(item.country || 'Worldwide')}</td>
@@ -1227,7 +1246,7 @@ function privateRows(items = []) {
     <td data-col="status"><span class="status ${item.priority === 'High' ? '' : item.status === 'closed' ? 'expired' : ''}">${escapeHtml(statusText(item.status))}</span></td>
     <td data-col="source">${escapeHtml(compactText(item.configured_source_name || item.source_name || '-', 30))}</td>
     <td data-col="updated">${shortDate(item.updated_at)}</td>
-    <td data-col="actions"><a class="button button-ghost" href="/contract-finder/admin/private-opportunities/${encodeURIComponent(item.slug)}">Open</a></td>
+    <td data-col="actions"><a class="button button-ghost" href="${basePath}/${encodeURIComponent(item.slug)}">Open</a></td>
   </tr>`).join('') || '<tr><td colspan="13" class="empty-row">No private opportunities yet.</td></tr>';
 }
 
@@ -1261,6 +1280,7 @@ function privateFilterForm(filters = {}, params = new URLSearchParams()) {
     <div class="field"><label>Keyword</label><input name="keyword" value="${escapeHtml(params.get('keyword') || '')}" placeholder="Company, service, city..."></div>
     <div class="field"><label>Country</label><select name="country"><option value="">All</option>${selectOptions(filters.countries || [], params.get('country'))}</select></div>
     <div class="field"><label>Industry</label><select name="industry"><option value="">All</option>${selectOptions(filters.industries || [], params.get('industry'))}</select></div>
+    <div class="field"><label>Lead category</label><select name="lead_category"><option value="">All</option>${selectOptions(filters.lead_categories || [], params.get('lead_category'))}</select></div>
     <div class="field"><label>Service</label><select name="service"><option value="">All</option>${selectOptions(filters.services || [], params.get('service'))}</select></div>
     <div class="field"><label>Status</label><select name="status"><option value="">All</option>${selectOptions(filters.statuses || [], params.get('status'))}</select></div>
     <div class="field"><label>Source</label><select name="source_id"><option value="">All</option>${(filters.sources || []).map((source) => option(String(source.id), params.get('source_id'), source.name)).join('')}</select></div>
@@ -1275,27 +1295,32 @@ function privateFilterForm(filters = {}, params = new URLSearchParams()) {
 
 async function renderPrivateOpportunities() {
   if (!(await requireLogin())) return; if(currentUser.role !== 'admin'){app.innerHTML='<section class="page"><div class="empty">Administrator access required.</div></section>';return;}
+  const basePath = leadFinderBasePath();
   const params = new URLSearchParams(location.search);
   if (!params.get('page_size')) params.set('page_size', '100');
   const data = await api(`/admin/private-opportunities?${params}`);
   const opportunities = data.opportunities || { items: [], pagination: { page: 1, pages: 1, total: 0 } };
   app.innerHTML = `<section class="page dense-page">
     <div class="section-heading dense-heading">
-      <div><p class="eyebrow">Admin-only business development</p><h1>Private Opportunities</h1></div>
-      <p>Internal workspace for private building maintenance, facility management, AMC, facade, glass cleaning, and rope access opportunities.</p>
+      <div><p class="eyebrow">Admin-only business development</p><h1>Lead Finder</h1></div>
+      <p>Internal lead finder for private building maintenance, facility management, AMC, facade, glass cleaning, and rope access opportunities.</p>
     </div>
     ${dashboardNav()}
     <div class="metric-grid dashboard-metrics">${privateMetricGrid(data.dashboard)}</div>
+    <div class="panel lead-finder-panel">
+      <div class="section-heading compact"><div><p class="eyebrow">Lead Finder</p><h2>Target Segments</h2></div><p>Find private building maintenance leads by client segment and vendor registration opportunities.</p></div>
+      ${leadCategoryCards(data.filters, params, basePath)}
+    </div>
     <div class="dense-toolbar sticky-toolbar">
       <form id="private-quick-search" class="dense-search"><input name="keyword" value="${escapeHtml(params.get('keyword') || '')}" placeholder="Search private opportunities..."><button class="button button-gold">Search</button></form>
       <div class="toolbar"><span class="chip">${opportunities.pagination.total} private opportunities</span><a class="button button-outline" href="/contract-finder/admin">Government Contracts</a>${columnSelector(privateOpportunityColumns, 'private-opportunities')}</div>
-      <div class="chip-row quick-filters">${['Rope Access','Glass Cleaning','Building Maintenance','AMC','Facility Management'].map((service) => { const query = new URLSearchParams(params); query.set('service', service); query.set('page','1'); return `<a class="chip ${params.get('service') === service ? 'chip-gold' : ''}" href="/contract-finder/admin/private-opportunities?${query}">${escapeHtml(service)}</a>`; }).join('')}</div>
+      <div class="chip-row quick-filters">${['Rope Access','Glass Cleaning','Building Maintenance','AMC','Facility Management'].map((service) => { const query = new URLSearchParams(params); query.set('service', service); query.set('page','1'); return `<a class="chip ${params.get('service') === service ? 'chip-gold' : ''}" href="${basePath}?${query}">${escapeHtml(service)}</a>`; }).join('')}</div>
     </div>
     <details class="filter-drawer"><summary class="button button-outline">Advanced filters</summary>${privateFilterForm(data.filters, params)}</details>
     <div class="dense-table-wrap virtual-table">
       <table class="dense-table private-opportunity-table">
         <thead><tr>${privateOpportunityColumns.map(([id, label]) => `<th data-col="${escapeHtml(id)}">${escapeHtml(label)}</th>`).join('')}</tr></thead>
-        <tbody>${privateRows(opportunities.items)}</tbody>
+        <tbody>${privateRows(opportunities.items, basePath)}</tbody>
       </table>
     </div>
     <div class="pagination sticky-pagination">
@@ -1337,10 +1362,10 @@ async function renderPrivateOpportunities() {
     </div>
     <div class="panel" style="margin-top:20px"><h2>Source Logs</h2><div id="private-source-logs" class="list"><div class="empty compact-empty">Select View Logs on a private source.</div></div></div>
   </section>`;
-  document.querySelector('#private-quick-search').onsubmit = (event) => { event.preventDefault(); const query = new URLSearchParams(location.search); query.set('keyword', new FormData(event.currentTarget).get('keyword') || ''); query.set('page','1'); location.href = `/contract-finder/admin/private-opportunities?${query}`; };
-  document.querySelector('#private-filters').onsubmit = (event) => { event.preventDefault(); const query = new URLSearchParams(new FormData(event.currentTarget)); query.set('page_size', params.get('page_size') || '100'); query.set('page','1'); location.href = `/contract-finder/admin/private-opportunities?${query}`; };
-  document.querySelector('#private-prev').onclick = () => { const query = new URLSearchParams(location.search); query.set('page', opportunities.pagination.page - 1); location.href = `/contract-finder/admin/private-opportunities?${query}`; };
-  document.querySelector('#private-next').onclick = () => { const query = new URLSearchParams(location.search); query.set('page', opportunities.pagination.page + 1); location.href = `/contract-finder/admin/private-opportunities?${query}`; };
+  document.querySelector('#private-quick-search').onsubmit = (event) => { event.preventDefault(); const query = new URLSearchParams(location.search); query.set('keyword', new FormData(event.currentTarget).get('keyword') || ''); query.set('page','1'); location.href = `${basePath}?${query}`; };
+  document.querySelector('#private-filters').onsubmit = (event) => { event.preventDefault(); const query = new URLSearchParams(new FormData(event.currentTarget)); query.set('page_size', params.get('page_size') || '100'); query.set('page','1'); location.href = `${basePath}?${query}`; };
+  document.querySelector('#private-prev').onclick = () => { const query = new URLSearchParams(location.search); query.set('page', opportunities.pagination.page - 1); location.href = `${basePath}?${query}`; };
+  document.querySelector('#private-next').onclick = () => { const query = new URLSearchParams(location.search); query.set('page', opportunities.pagination.page + 1); location.href = `${basePath}?${query}`; };
   bindDenseTableControls(app);
   const privateSources = data.dashboard.sources || [];
   document.querySelector('#private-source-form').onsubmit = async (event) => {
@@ -1396,6 +1421,7 @@ async function renderPrivateOpportunities() {
 
 async function renderPrivateOpportunityDetail() {
   if (!(await requireLogin())) return; if(currentUser.role !== 'admin'){app.innerHTML='<section class="page"><div class="empty">Administrator access required.</div></section>';return;}
+  const basePath = leadFinderBasePath();
   const { opportunity } = await api(`/admin/private-opportunities/${encodeURIComponent(identifier)}`);
   const originalButton = opportunity.original_source_url ? `<a class="button button-gold" href="${escapeHtml(opportunity.original_source_url)}" target="_blank" rel="noopener noreferrer">Open Original Source</a>` : '';
   const vendorButton = opportunity.vendor_registration_url ? `<a class="button button-outline" href="${escapeHtml(opportunity.vendor_registration_url)}" target="_blank" rel="noopener noreferrer">Vendor Registration</a>` : '';
@@ -1430,7 +1456,7 @@ async function renderPrivateOpportunityDetail() {
           <div><dt>Source</dt><dd>${escapeHtml(opportunity.configured_source_name || opportunity.source_name)}</dd></div>
           <div><dt>Last updated</dt><dd>${date(opportunity.updated_at)}</dd></div>
         </dl>
-        <div class="toolbar" style="margin-top:22px">${originalButton}${vendorButton}<a class="button button-outline" href="/contract-finder/admin/private-opportunities">Back</a></div>
+        <div class="toolbar" style="margin-top:22px">${originalButton}${vendorButton}<a class="button button-outline" href="${basePath}">Back</a></div>
       </div>
     </aside>
   </section>`;

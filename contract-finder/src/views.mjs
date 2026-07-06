@@ -14,7 +14,7 @@ const pageMeta = {
   sourceDiscovery: ['Source Discovery | Skyproz', 'Discover official procurement APIs, feeds, authentication and field mappings.'],
   connectorWizard: ['Connector Wizard | Skyproz', 'Guided setup for official procurement connector APIs and public feeds.'],
   marketplace: ['Connector Marketplace | Skyproz', 'Review procurement connector coverage and install supported official sources.'],
-  privateOpportunities: ['Private Opportunities | Skyproz', 'Admin-only private building maintenance opportunity management.'],
+  privateOpportunities: ['Lead Finder | Skyproz', 'Admin-only private building maintenance lead and opportunity management.'],
   privateOpportunity: ['Private Opportunity Detail | Skyproz', 'Admin-only private opportunity intelligence and source details.'],
   login: ['Sign In | Skyproz Contract Finder', 'Sign in to save contracts and create opportunity alerts.']
 };

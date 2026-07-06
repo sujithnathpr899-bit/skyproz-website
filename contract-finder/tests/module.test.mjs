@@ -225,6 +225,8 @@ test('private opportunities support admin-only building maintenance pipeline', a
     assert.equal(search.pagination.total, 1);
     assert.ok(search.items[0].match_score >= 70);
     assert.ok(search.items[0].required_services.includes('Glass Cleaning'));
+    const leadCategory = searchPrivateOpportunities({ lead_category: 'Shopping Malls', page_size: 100 });
+    assert.equal(leadCategory.pagination.total, 1);
     const detail = getPrivateOpportunity(search.items[0].slug);
     assert.equal(detail.company, 'Metro Mall Facilities');
     assert.equal(detail.original_source_url, 'https://example.test/private/rfq-100');

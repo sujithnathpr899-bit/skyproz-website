@@ -107,7 +107,7 @@ export const server = createServer(async (request, response) => {
       if (!contract) return sendHtml(response, 404, renderShell({ page: 'not-found' }), {}, request);
       return sendHtml(response, 200, renderShell({ page: 'contract', identifier: detail[1], contract }), { 'cache-control': 'public, max-age=60' }, request);
     }
-    const privateOpportunityDetail = url.pathname.match(/^\/contract-finder\/admin\/private-opportunities\/([^/]+)$/);
+    const privateOpportunityDetail = url.pathname.match(/^\/contract-finder\/admin\/(?:private-opportunities|lead-finder)\/([^/]+)$/);
     if (privateOpportunityDetail) {
       requireAdmin(request);
       return sendHtml(response, 200, renderShell({ page: 'privateOpportunity', identifier: decodeURIComponent(privateOpportunityDetail[1]) }), { 'cache-control': 'no-store' }, request);
@@ -124,6 +124,8 @@ export const server = createServer(async (request, response) => {
       ['/contract-finder/admin/marketplace', 'marketplace'],
       ['/contract-finder/admin/private-opportunities', 'privateOpportunities'],
       ['/contract-finder/admin/private-opportunities/', 'privateOpportunities'],
+      ['/contract-finder/admin/lead-finder', 'privateOpportunities'],
+      ['/contract-finder/admin/lead-finder/', 'privateOpportunities'],
       ['/admin/connectors', 'connectors'],
       ['/admin/source-discovery', 'sourceDiscovery'],
       ['/admin/connector-wizard', 'connectorWizard'],
