@@ -88,11 +88,14 @@ export const server = createServer(async (request, response) => {
     const workerPublicProfile = url.pathname.match(/^\/workers\/profile\/([^/]+)$/);
     if (workerPublicProfile) {
       return sendHtml(response, 200, renderWorkerShell({ page: 'publicProfile', identifier: decodeURIComponent(workerPublicProfile[1]) }), { 'cache-control': 'public, max-age=60' }, request);
-    }    const workerPages = new Map([
+    }
+    const workerPages = new Map([
       ['/workers', 'opportunities'], ['/workers/', 'opportunities'], ['/workers/opportunities', 'opportunities'],
       ['/workers/login', 'login'], ['/workers/signup', 'signup'], ['/workers/dashboard', 'dashboard'],
       ['/workers/profile', 'profile'], ['/workers/certifications', 'certifications'], ['/workers/documents', 'documents'],
       ['/workers/applications', 'applications'], ['/workers/saved-jobs', 'savedJobs'], ['/workers/notifications', 'notifications'],
+      ['/workers/resume', 'resume'], ['/workers/skills', 'skills'], ['/workers/job-alerts', 'jobAlerts'],
+      ['/workers/interviews', 'interviews'], ['/workers/analytics', 'analytics'], ['/workers/subscription', 'subscription'],
       ['/workers/settings', 'settings'], ['/workers/admin', 'admin']
     ]);
     const workerPage = workerPages.get(url.pathname);
