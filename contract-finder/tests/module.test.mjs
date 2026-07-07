@@ -15,12 +15,17 @@ const { createSession, hashPassword, sessionCookie, verifyPassword } = await imp
 const { handleApi } = await import('../src/api.mjs');
 const { renderShell } = await import('../src/views.mjs');
 const {
+  convertPrivateOpportunityToCrm,
+  createBusinessLeadSavedSearch,
   createPrivateOpportunity,
   createPrivateSource,
   getPrivateOpportunity,
   importPrivateSource,
+  listBusinessLeadSavedSearches,
   privateOpportunityDashboard,
   searchPrivateOpportunities,
+  setPrivateOpportunityAlert,
+  setPrivateOpportunityWatchlist,
   testPrivateSource
 } = await import('../src/private-opportunities.mjs');
 const { analyzeOpportunity, listKeywords } = await import('../src/services/procurement-bot.mjs');
@@ -185,6 +190,15 @@ test('private opportunities support admin-only building maintenance pipeline', a
         state: 'Kerala',
         city: 'Kochi',
         industry: 'Shopping Malls',
+        building_type: 'Shopping Mall',
+        lead_type: 'rfq',
+        vendor_registration_url: 'https://example.test/vendor-registration',
+        procurement_portal_url: 'https://example.test/procurement',
+        company_profile_url: 'https://example.test/company/metro-mall',
+        public_contact_email: 'facilities@example.test',
+        public_contact_phone: '+91 99999 00000',
+        latitude: 9.9312,
+        longitude: 76.2673,
         deadline: '2026-09-20',
         budget_value: 1200000,
         currency: 'INR'
@@ -221,6 +235,15 @@ test('private opportunities support admin-only building maintenance pipeline', a
           state: 'state',
           city: 'city',
           industry: 'industry',
+          building_type: 'building_type',
+          lead_type: 'lead_type',
+          vendor_registration_url: 'vendor_registration_url',
+          procurement_portal_url: 'procurement_portal_url',
+          company_profile_url: 'company_profile_url',
+          public_contact_email: 'public_contact_email',
+          public_contact_phone: 'public_contact_phone',
+          map_latitude: 'latitude',
+          map_longitude: 'longitude',
           deadline: 'deadline',
           budget_value: 'budget_value',
           currency: 'currency'
@@ -237,14 +260,36 @@ test('private opportunities support admin-only building maintenance pipeline', a
     assert.equal(search.pagination.total, 1);
     assert.ok(search.items[0].match_score >= 70);
     assert.ok(search.items[0].required_services.includes('Glass Cleaning'));
+    assert.equal(search.items[0].lead_type, 'rfq');
+    assert.equal(search.items[0].country, 'India');
     const leadCategory = searchPrivateOpportunities({ lead_category: 'Shopping Malls', page_size: 100 });
     assert.equal(leadCategory.pagination.total, 1);
+    const stateSearch = searchPrivateOpportunities({ state: 'Kerala', building_type: 'Shopping Mall', lead_type: 'rfq', page_size: 100 });
+    assert.equal(stateSearch.pagination.total, 1);
     const detail = getPrivateOpportunity(search.items[0].slug);
     assert.equal(detail.company, 'Metro Mall Facilities');
     assert.equal(detail.original_source_url, 'https://example.test/private/rfq-100');
+    assert.equal(detail.public_contact_email, 'facilities@example.test');
+    assert.equal(detail.procurement_portal_url, 'https://example.test/procurement');
+    assert.ok(detail.lead_score_reason.includes('Matched services'));
     assert.ok(detail.required_certifications.includes('IRATA Rope Access Certification'));
+    const watched = setPrivateOpportunityWatchlist(detail.id, true);
+    assert.equal(watched.watchlist, true);
+    const alerted = setPrivateOpportunityAlert(detail.id, true);
+    assert.equal(alerted.alert_enabled, true);
+    const savedSearch = createBusinessLeadSavedSearch({ name: 'Kerala mall leads', filters: { state: 'Kerala', service: 'Rope Access' }, alert_enabled: true });
+    assert.equal(savedSearch.alert_enabled, true);
+    assert.equal(listBusinessLeadSavedSearches().length >= 1, true);
+    const crmResult = convertPrivateOpportunityToCrm(detail.id, { id: null });
+    assert.equal(crmResult.record.module_key, 'crm');
+    assert.equal(crmResult.opportunity.crm_status, 'converted');
     const dashboard = privateOpportunityDashboard();
     assert.ok(dashboard.total_opportunities >= 1);
+    assert.ok(dashboard.india_leads >= 1);
+    assert.ok(dashboard.vendor_registrations >= 1);
+    assert.ok(dashboard.procurement_portals >= 1);
+    assert.ok(dashboard.watchlist_leads >= 1);
+    assert.ok(dashboard.crm_converted >= 1);
     assert.ok(dashboard.amc_opportunities >= 1);
     assert.ok(dashboard.rope_access_opportunities >= 1);
   } finally {

@@ -1,4 +1,5 @@
 import { db, parseJson } from './db.mjs';
+import { createErpRecord } from './erp.mjs';
 import { clampInt, normalizeIsoDate, slugify } from './utils.mjs';
 
 const SERVICE_RULES = [
@@ -33,7 +34,22 @@ const LEAD_FINDER_CATEGORIES = [
   'Vendor Registration'
 ];
 
-const SOURCE_TYPES = new Set(['procurement_portal', 'vendor_registration', 'rfq_page', 'rfp_page', 'tender_page', 'rss', 'json', 'xml', 'csv']);
+const INDIA_STATES = [
+  'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh', 'Goa',
+  'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka', 'Kerala',
+  'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram', 'Nagaland',
+  'Odisha', 'Punjab', 'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana', 'Tripura',
+  'Uttar Pradesh', 'Uttarakhand', 'West Bengal', 'Andaman and Nicobar Islands',
+  'Chandigarh', 'Dadra and Nagar Haveli and Daman and Diu', 'Delhi',
+  'Jammu and Kashmir', 'Ladakh', 'Lakshadweep', 'Puducherry'
+];
+
+const BUSINESS_LEAD_TYPES = [
+  'business_intelligence', 'company_profile', 'vendor_registration',
+  'procurement_portal', 'rfq', 'rfp', 'public_notice', 'website_signal'
+];
+
+const SOURCE_TYPES = new Set(['procurement_portal', 'vendor_registration', 'rfq_page', 'rfp_page', 'tender_page', 'company_website', 'public_notice', 'rss', 'json', 'xml', 'csv']);
 
 const SORT_COLUMNS = {
   score: 'p.match_score',
@@ -49,6 +65,9 @@ const SORT_COLUMNS = {
   deadline: 'p.deadline',
   status: 'p.status',
   source: 'p.source_name',
+  lead_type: 'p.lead_type',
+  watchlist: 'p.watchlist',
+  crm_status: 'p.crm_status',
   updated: 'p.updated_at',
   last_updated: 'p.updated_at'
 };
@@ -70,7 +89,9 @@ function list(value) {
 function textFor(input = {}) {
   return [
     input.company, input.title, input.description, input.building_type, input.industry,
-    input.country, input.state, input.city, ...list(input.required_services), ...list(input.tags)
+    input.country, input.state, input.city, input.lead_type, input.company_profile_url,
+    input.vendor_registration_url, input.procurement_portal_url, input.original_source_url,
+    ...list(input.required_services), ...list(input.tags)
   ].filter(Boolean).join(' ').toLowerCase();
 }
 
@@ -110,14 +131,32 @@ function checklist(services = []) {
   return items;
 }
 
+function detectLeadType(input = {}, haystack = textFor(input)) {
+  const configured = String(input.lead_type || '').trim();
+  if (BUSINESS_LEAD_TYPES.includes(configured)) return configured;
+  if (input.vendor_registration_url || /vendor registration|supplier registration|empanelment|vendor portal|supplier portal/.test(haystack)) return 'vendor_registration';
+  if (input.procurement_portal_url || /procurement portal|eprocurement|e-procurement|tender portal/.test(haystack)) return 'procurement_portal';
+  if (/\brfq\b|request for quote|request for quotation/.test(haystack)) return 'rfq';
+  if (/\brfp\b|request for proposal/.test(haystack)) return 'rfp';
+  if (/notice|expression of interest|eoi|public notice/.test(haystack)) return 'public_notice';
+  if (input.company_profile_url || /about us|company profile|facility page|property portfolio/.test(haystack)) return 'company_profile';
+  return 'business_intelligence';
+}
+
 export function analyzePrivateOpportunity(input = {}) {
   const services = detectServices(input);
   const haystack = textFor({ ...input, required_services: services });
+  const leadType = detectLeadType(input, haystack);
   let score = 20;
   score += Math.min(45, services.length * 9);
   if (TARGET_INDUSTRIES.some((industry) => haystack.includes(industry.toLowerCase()))) score += 12;
   if (/amc|annual maintenance|facility management|building maintenance/.test(haystack)) score += 10;
   if (/rope access|irata|high rise|facade|glass cleaning/.test(haystack)) score += 10;
+  if (String(input.country || '').toLowerCase() === 'india') score += 5;
+  if (input.state && INDIA_STATES.some((state) => state.toLowerCase() === String(input.state).toLowerCase())) score += 4;
+  if (['vendor_registration', 'procurement_portal', 'rfq', 'rfp'].includes(leadType)) score += 6;
+  if (input.public_contact_email || input.public_contact_phone) score += 4;
+  if (input.company_profile_url || input.vendor_registration_url || input.procurement_portal_url) score += 4;
   if (input.budget_value && Number(input.budget_value) > 0) score += 5;
   if (input.deadline) {
     const days = Math.ceil((new Date(input.deadline).valueOf() - Date.now()) / 86400000);
@@ -136,7 +175,14 @@ export function analyzePrivateOpportunity(input = {}) {
     required_certifications: requiredCertifications(services),
     required_documents: requiredDocuments(services),
     submission_checklist: checklist(services),
-    recommended_services: services.length ? services : ['Building Maintenance', 'Facility Management']
+    recommended_services: services.length ? services : ['Building Maintenance', 'Facility Management'],
+    lead_type: leadType,
+    lead_score_reason: [
+      services.length ? `Matched services: ${services.join(', ')}` : 'No direct service keyword match',
+      TARGET_INDUSTRIES.some((industry) => haystack.includes(industry.toLowerCase())) ? 'Target building/client segment detected' : 'Client segment needs review',
+      String(input.country || '').toLowerCase() === 'india' ? 'India opportunity' : 'Non-India or location not stated',
+      ['vendor_registration', 'procurement_portal', 'rfq', 'rfp'].includes(leadType) ? `Actionable source type: ${leadType.replaceAll('_', ' ')}` : `Lead type: ${leadType.replaceAll('_', ' ')}`
+    ].join(' | ')
   };
 }
 
@@ -155,6 +201,8 @@ function serializeOpportunity(row) {
   if (!row) return null;
   return {
     ...row,
+    watchlist: Boolean(row.watchlist),
+    alert_enabled: Boolean(row.alert_enabled),
     required_services: parseJson(row.required_services_json, []),
     required_certifications: parseJson(row.required_certifications_json, []),
     required_documents: parseJson(row.required_documents_json, []),
@@ -199,6 +247,7 @@ function opportunityValues(input, existing = {}) {
     country: String(input.country ?? existing.country ?? 'Worldwide').trim(),
     state: String(input.state ?? existing.state ?? '').trim(),
     city: String(input.city ?? existing.city ?? '').trim(),
+    lead_type: analysis.lead_type,
     budget_value: input.budget_value === '' || input.budget_value === undefined ? existing.budget_value ?? null : Number(input.budget_value),
     currency: input.currency ?? existing.currency ?? null,
     deadline: normalizeIsoDate(input.deadline ?? existing.deadline),
@@ -207,7 +256,19 @@ function opportunityValues(input, existing = {}) {
     source_name: String(input.source_name ?? existing.source_name ?? 'Private Source').trim(),
     source_url: sourceUrl,
     vendor_registration_url: input.vendor_registration_url ?? existing.vendor_registration_url ?? null,
+    company_profile_url: input.company_profile_url ?? existing.company_profile_url ?? null,
+    public_contact_email: input.public_contact_email ?? existing.public_contact_email ?? null,
+    public_contact_phone: input.public_contact_phone ?? existing.public_contact_phone ?? null,
+    procurement_portal_url: input.procurement_portal_url ?? existing.procurement_portal_url ?? null,
     original_source_url: originalSourceUrl,
+    map_latitude: input.map_latitude === '' || input.map_latitude === undefined ? existing.map_latitude ?? null : Number(input.map_latitude),
+    map_longitude: input.map_longitude === '' || input.map_longitude === undefined ? existing.map_longitude ?? null : Number(input.map_longitude),
+    crm_status: input.crm_status ?? existing.crm_status ?? 'not_converted',
+    crm_record_id: input.crm_record_id ?? existing.crm_record_id ?? null,
+    watchlist: input.watchlist === undefined ? Number(existing.watchlist || 0) : Number(Boolean(input.watchlist)),
+    alert_enabled: input.alert_enabled === undefined ? Number(existing.alert_enabled || 0) : Number(Boolean(input.alert_enabled)),
+    source_compliance: input.source_compliance ?? existing.source_compliance ?? 'public_or_official',
+    lead_score_reason: input.lead_score_reason ?? existing.lead_score_reason ?? analysis.lead_score_reason,
     ai_summary: input.ai_summary ?? existing.ai_summary ?? analysis.ai_summary,
     match_score: Number(input.match_score ?? existing.match_score ?? analysis.match_score),
     required_certifications_json: JSON.stringify(list(input.required_certifications).length ? list(input.required_certifications) : analysis.required_certifications),
@@ -256,14 +317,17 @@ export function searchPrivateOpportunities(filters = {}) {
   const where = [];
   const values = [];
   if (filters.keyword) {
-    where.push('(p.title LIKE ? OR p.description LIKE ? OR p.company LIKE ? OR p.required_services_json LIKE ?)');
+    where.push('(p.title LIKE ? OR p.description LIKE ? OR p.company LIKE ? OR p.required_services_json LIKE ? OR p.public_contact_email LIKE ?)');
     const keyword = `%${String(filters.keyword).trim()}%`;
-    values.push(keyword, keyword, keyword, keyword);
+    values.push(keyword, keyword, keyword, keyword, keyword);
   }
-  for (const [key, column] of [['country','p.country'], ['state','p.state'], ['city','p.city'], ['industry','p.industry'], ['status','p.status'], ['source','p.source_name']]) {
+  for (const [key, column] of [['country','p.country'], ['state','p.state'], ['city','p.city'], ['industry','p.industry'], ['building_type','p.building_type'], ['status','p.status'], ['source','p.source_name'], ['company','p.company'], ['lead_type','p.lead_type'], ['crm_status','p.crm_status']]) {
     if (filters[key]) { where.push(`${column} = ?`); values.push(String(filters[key])); }
   }
   if (filters.service) { where.push('p.required_services_json LIKE ?'); values.push(`%${String(filters.service)}%`); }
+  if (filters.watchlist !== undefined && filters.watchlist !== '') { where.push('p.watchlist = ?'); values.push(Number(Boolean(Number(filters.watchlist)))); }
+  if (filters.has_vendor_registration) { where.push("p.vendor_registration_url IS NOT NULL AND p.vendor_registration_url <> ''"); }
+  if (filters.has_procurement_portal) { where.push("p.procurement_portal_url IS NOT NULL AND p.procurement_portal_url <> ''"); }
   if (filters.lead_category) {
     const category = String(filters.lead_category);
     if (category === 'Vendor Registration') {
@@ -299,13 +363,27 @@ export function privateOpportunityDashboard() {
     total_opportunities: value('SELECT COUNT(*) AS value FROM private_opportunities'),
     new_today: value("SELECT COUNT(*) AS value FROM private_opportunities WHERE date(created_at) = date('now')"),
     closing_soon: value("SELECT COUNT(*) AS value FROM private_opportunities WHERE deadline BETWEEN CURRENT_TIMESTAMP AND datetime('now', '+14 days')"),
+    india_leads: value("SELECT COUNT(*) AS value FROM private_opportunities WHERE country = 'India'"),
+    states_covered: value("SELECT COUNT(DISTINCT state) AS value FROM private_opportunities WHERE country = 'India' AND state <> ''"),
+    vendor_registrations: value("SELECT COUNT(*) AS value FROM private_opportunities WHERE lead_type = 'vendor_registration' OR vendor_registration_url IS NOT NULL"),
+    procurement_portals: value("SELECT COUNT(*) AS value FROM private_opportunities WHERE lead_type = 'procurement_portal' OR procurement_portal_url IS NOT NULL"),
+    watchlist_leads: value('SELECT COUNT(*) AS value FROM private_opportunities WHERE watchlist = 1'),
+    crm_converted: value("SELECT COUNT(*) AS value FROM private_opportunities WHERE crm_status = 'converted'"),
     amc_opportunities: value("SELECT COUNT(*) AS value FROM private_opportunities WHERE required_services_json LIKE '%AMC%' OR title LIKE '%AMC%' OR description LIKE '%annual maintenance%'"),
     rope_access_opportunities: value("SELECT COUNT(*) AS value FROM private_opportunities WHERE required_services_json LIKE '%Rope Access%'"),
     building_maintenance_opportunities: value("SELECT COUNT(*) AS value FROM private_opportunities WHERE required_services_json LIKE '%Building Maintenance%' OR industry LIKE '%Building%'"),
     high_priority: value("SELECT COUNT(*) AS value FROM private_opportunities WHERE priority = 'High' OR match_score >= 80"),
     ai_matches: value('SELECT COUNT(*) AS value FROM private_opportunities WHERE match_score >= 55'),
+    lead_types: db.prepare('SELECT lead_type, COUNT(*) AS count FROM private_opportunities GROUP BY lead_type ORDER BY count DESC').all(),
+    top_states: db.prepare("SELECT state, COUNT(*) AS count FROM private_opportunities WHERE state <> '' GROUP BY state ORDER BY count DESC LIMIT 12").all(),
+    top_industries: db.prepare("SELECT industry, COUNT(*) AS count FROM private_opportunities WHERE industry <> '' GROUP BY industry ORDER BY count DESC LIMIT 12").all(),
+    map_points: db.prepare(`SELECT id, slug, company, title, state, city, map_latitude, map_longitude, match_score
+      FROM private_opportunities
+      WHERE map_latitude IS NOT NULL AND map_longitude IS NOT NULL
+      ORDER BY match_score DESC LIMIT 50`).all(),
     sources: db.prepare('SELECT * FROM private_opportunity_sources ORDER BY name').all().map(serializeSource),
-    recent: searchPrivateOpportunities({ page_size: 10 }).items
+    recent: searchPrivateOpportunities({ page_size: 10 }).items,
+    saved_searches: listBusinessLeadSavedSearches()
   };
 }
 
@@ -313,10 +391,14 @@ export function privateFilterOptions() {
   const distinct = (column) => db.prepare(`SELECT DISTINCT ${column} AS value FROM private_opportunities WHERE ${column} IS NOT NULL AND ${column} <> '' ORDER BY value`).all().map((row) => row.value);
   return {
     countries: distinct('country'),
-    states: distinct('state'),
+    states: [...new Set([...INDIA_STATES, ...distinct('state')])],
     cities: distinct('city'),
     industries: distinct('industry'),
+    companies: distinct('company'),
+    building_types: distinct('building_type'),
     statuses: distinct('status'),
+    lead_types: BUSINESS_LEAD_TYPES,
+    crm_statuses: ['not_converted', 'converted', 'not_interested', 'follow_up'],
     services: SERVICE_RULES.map(([service]) => service),
     sources: db.prepare('SELECT id, name, source_type, country FROM private_opportunity_sources ORDER BY name').all(),
     lead_categories: LEAD_FINDER_CATEGORIES,
@@ -478,6 +560,7 @@ function mapItem(item, source) {
     country: get('country', ['country']) || source.country || 'Worldwide',
     state: get('state', ['state', 'region']) || source.state || '',
     city: get('city', ['city']) || source.city || '',
+    lead_type: get('lead_type', ['lead_type', 'type', 'notice_type']),
     budget_value: get('budget_value', ['budget', 'value', 'estimated_value']),
     currency: get('currency', ['currency']),
     deadline: get('deadline', ['deadline', 'closing_date', 'submission_deadline']),
@@ -485,6 +568,12 @@ function mapItem(item, source) {
     source_name: source.name,
     source_url: sourceUrl,
     vendor_registration_url: get('vendor_registration_url', ['vendor_registration_url', 'registration_url']) || null,
+    company_profile_url: get('company_profile_url', ['company_profile_url', 'company_url', 'website']) || null,
+    public_contact_email: get('public_contact_email', ['public_contact_email', 'email', 'contact_email']) || null,
+    public_contact_phone: get('public_contact_phone', ['public_contact_phone', 'phone', 'contact_phone']) || null,
+    procurement_portal_url: get('procurement_portal_url', ['procurement_portal_url', 'portal_url']) || null,
+    map_latitude: get('map_latitude', ['map_latitude', 'latitude', 'lat']),
+    map_longitude: get('map_longitude', ['map_longitude', 'longitude', 'lng', 'lon']),
     original_source_url: sourceUrl,
     metadata: item
   };
@@ -570,4 +659,71 @@ export async function importPrivateSource(id) {
     logPrivateSource(id, 'source.import', 'error', error.message, { code: error.code });
     throw error;
   }
+}
+
+export function listBusinessLeadSavedSearches(userId = null) {
+  const rows = userId
+    ? db.prepare('SELECT * FROM business_lead_saved_searches WHERE user_id = ? OR user_id IS NULL ORDER BY updated_at DESC').all(userId)
+    : db.prepare('SELECT * FROM business_lead_saved_searches ORDER BY updated_at DESC').all();
+  return rows.map((row) => ({ ...row, alert_enabled: Boolean(row.alert_enabled), filters: parseJson(row.filters_json, {}) }));
+}
+
+export function createBusinessLeadSavedSearch(input = {}, user = null) {
+  const name = String(input.name || '').trim();
+  if (!name) throw Object.assign(new Error('Saved search name is required'), { status: 400 });
+  const result = db.prepare(`INSERT INTO business_lead_saved_searches(user_id, name, filters_json, alert_enabled)
+    VALUES (?, ?, ?, ?)`).run(user?.id || null, name, JSON.stringify(input.filters || {}), Number(Boolean(input.alert_enabled)));
+  return listBusinessLeadSavedSearches(user?.id || null).find((item) => item.id === Number(result.lastInsertRowid));
+}
+
+export function deleteBusinessLeadSavedSearch(id, user = null) {
+  const row = db.prepare('SELECT * FROM business_lead_saved_searches WHERE id = ?').get(id);
+  if (!row) throw Object.assign(new Error('Saved search not found'), { status: 404 });
+  if (row.user_id && user?.id !== row.user_id) throw Object.assign(new Error('Saved search not found'), { status: 404 });
+  db.prepare('DELETE FROM business_lead_saved_searches WHERE id = ?').run(id);
+  return true;
+}
+
+export function setPrivateOpportunityWatchlist(id, enabled = true) {
+  const existing = db.prepare('SELECT id FROM private_opportunities WHERE id = ?').get(id);
+  if (!existing) throw Object.assign(new Error('Private opportunity not found'), { status: 404 });
+  db.prepare('UPDATE private_opportunities SET watchlist = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(Number(Boolean(enabled)), id);
+  return getPrivateOpportunity(Number(id));
+}
+
+export function setPrivateOpportunityAlert(id, enabled = true) {
+  const existing = db.prepare('SELECT id FROM private_opportunities WHERE id = ?').get(id);
+  if (!existing) throw Object.assign(new Error('Private opportunity not found'), { status: 404 });
+  db.prepare('UPDATE private_opportunities SET alert_enabled = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(Number(Boolean(enabled)), id);
+  return getPrivateOpportunity(Number(id));
+}
+
+export function convertPrivateOpportunityToCrm(id, user = null) {
+  const opportunity = getPrivateOpportunity(id);
+  if (!opportunity) throw Object.assign(new Error('Private opportunity not found'), { status: 404 });
+  if (opportunity.crm_status === 'converted' && opportunity.crm_record_id) {
+    return { opportunity, crm_record_id: opportunity.crm_record_id, already_converted: true };
+  }
+  const record = createErpRecord('crm', {
+    title: `Business lead - ${opportunity.company}`,
+    status: 'new',
+    customer_name: opportunity.company,
+    company_name: opportunity.company,
+    contact_name: opportunity.public_contact_email || opportunity.public_contact_phone || '',
+    email: opportunity.public_contact_email || '',
+    phone: opportunity.public_contact_phone || '',
+    sites: [opportunity.city, opportunity.state, opportunity.country].filter(Boolean).join(', '),
+    notes: [
+      opportunity.title,
+      opportunity.ai_summary,
+      opportunity.lead_score_reason,
+      opportunity.original_source_url ? `Source: ${opportunity.original_source_url}` : '',
+      opportunity.vendor_registration_url ? `Vendor registration: ${opportunity.vendor_registration_url}` : '',
+      opportunity.procurement_portal_url ? `Procurement portal: ${opportunity.procurement_portal_url}` : ''
+    ].filter(Boolean).join('\n'),
+    tags: ['Lead Finder', 'India Business Intelligence', ...(opportunity.required_services || [])]
+  }, user);
+  db.prepare(`UPDATE private_opportunities SET crm_status = 'converted', crm_record_id = ?, status = CASE WHEN status = 'new' THEN 'qualified' ELSE status END,
+    updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(record.id, opportunity.id);
+  return { opportunity: getPrivateOpportunity(id), record };
 }

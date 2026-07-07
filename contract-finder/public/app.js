@@ -53,6 +53,7 @@ const privateOpportunityColumns = [
   ['score', 'Match Score'],
   ['company', 'Company'],
   ['opportunity', 'Opportunity'],
+  ['lead_type', 'Lead Type'],
   ['service', 'Service'],
   ['industry', 'Industry'],
   ['country', 'Country'],
@@ -61,6 +62,7 @@ const privateOpportunityColumns = [
   ['deadline', 'Deadline'],
   ['status', 'Status'],
   ['source', 'Source'],
+  ['crm', 'CRM'],
   ['updated', 'Last Updated'],
   ['actions', 'Actions']
 ];
@@ -1258,10 +1260,13 @@ function sourceStatusRows(items = []) {
 
 function privateMetricGrid(dashboard = {}) {
   const metrics = [
-    ['Total Opportunities', dashboard.total_opportunities || 0],
+    ['India BI Leads', dashboard.india_leads || dashboard.total_opportunities || 0],
     ['New Today', dashboard.new_today || 0],
-    ['Closing Soon', dashboard.closing_soon || 0],
-    ['AMC Opportunities', dashboard.amc_opportunities || 0],
+    ['States Covered', dashboard.states_covered || 0],
+    ['Vendor Registrations', dashboard.vendor_registrations || 0],
+    ['Procurement Portals', dashboard.procurement_portals || 0],
+    ['Watchlist', dashboard.watchlist_leads || 0],
+    ['CRM Converted', dashboard.crm_converted || 0],
     ['Rope Access', dashboard.rope_access_opportunities || 0],
     ['Building Maintenance', dashboard.building_maintenance_opportunities || 0],
     ['High Priority', dashboard.high_priority || 0],
@@ -1291,11 +1296,30 @@ function leadCategoryCards(filters = {}, params = new URLSearchParams(), basePat
   }).join('')}</div>`;
 }
 
+function businessLeadAnalytics(dashboard = {}) {
+  const stateMax = Math.max(1, ...(dashboard.top_states || []).map((item) => Number(item.count || 0)));
+  const typeRows = (dashboard.lead_types || []).map((item) => `<div class="map-row"><span>${escapeHtml(statusText(item.lead_type || 'business_intelligence'))}</span><meter min="0" max="${dashboard.total_opportunities || 1}" value="${item.count || 0}"></meter><strong>${item.count || 0}</strong></div>`).join('');
+  const stateRows = (dashboard.top_states || []).map((item) => `<div class="map-row"><span>${escapeHtml(item.state || 'India')}</span><meter min="0" max="${stateMax}" value="${item.count || 0}"></meter><strong>${item.count || 0}</strong></div>`).join('');
+  return `<div class="dashboard-dense-grid third-row">
+    <div class="panel dense-panel"><div class="section-heading compact"><div><p class="eyebrow">Lead analytics</p><h2>Lead Types</h2></div></div><div class="map-panel">${typeRows || '<div class="empty compact-empty">No lead type data yet.</div>'}</div></div>
+    <div class="panel dense-panel"><div class="section-heading compact"><div><p class="eyebrow">India coverage</p><h2>Top States</h2></div></div><div class="map-panel">${stateRows || '<div class="empty compact-empty">No state data yet.</div>'}</div></div>
+    <div class="panel dense-panel"><div class="section-heading compact"><div><p class="eyebrow">Interactive map</p><h2>Mapped Leads</h2></div></div>${businessLeadMap(dashboard.map_points || [])}</div>
+  </div>`;
+}
+
+function businessLeadMap(points = []) {
+  return `<div class="map-panel lead-map">${points.map((point) => {
+    const mapsUrl = `https://www.google.com/maps?q=${encodeURIComponent(`${point.map_latitude},${point.map_longitude}`)}`;
+    return `<a class="map-row" href="${mapsUrl}" target="_blank" rel="noopener noreferrer"><span>${escapeHtml(compactText(`${point.company} - ${point.city || point.state || 'India'}`, 42))}</span><meter min="0" max="100" value="${point.match_score || 0}"></meter><strong>${point.match_score || 0}</strong></a>`;
+  }).join('') || '<div class="empty compact-empty">Add latitude and longitude to show leads on the map.</div>'}</div>`;
+}
+
 function privateRows(items = [], basePath = leadFinderBasePath()) {
   return items.map((item) => `<tr tabindex="0">
     <td data-col="score"><span class="score-pill">${item.match_score || 0}</span></td>
     <td data-col="company"><strong>${escapeHtml(compactText(item.company, 34))}</strong></td>
     <td data-col="opportunity"><a href="${basePath}/${encodeURIComponent(item.slug)}">${escapeHtml(compactText(item.title, 58))}</a><small>${escapeHtml(compactText(item.building_type || item.win_probability || '', 34))}</small></td>
+    <td data-col="lead_type"><span class="chip">${escapeHtml(statusText(item.lead_type || 'business_intelligence'))}</span></td>
     <td data-col="service">${escapeHtml(compactText((item.required_services || []).join(', '), 42))}</td>
     <td data-col="industry">${escapeHtml(compactText(item.industry || '-', 30))}</td>
     <td data-col="country">${escapeHtml(item.country || 'Worldwide')}</td>
@@ -1304,9 +1328,10 @@ function privateRows(items = [], basePath = leadFinderBasePath()) {
     <td data-col="deadline">${shortDate(item.deadline)}</td>
     <td data-col="status"><span class="status ${item.priority === 'High' ? '' : item.status === 'closed' ? 'expired' : ''}">${escapeHtml(statusText(item.status))}</span></td>
     <td data-col="source">${escapeHtml(compactText(item.configured_source_name || item.source_name || '-', 30))}</td>
+    <td data-col="crm"><span class="status">${escapeHtml(statusText(item.crm_status || 'not_converted'))}</span></td>
     <td data-col="updated">${shortDate(item.updated_at)}</td>
-    <td data-col="actions"><a class="button button-ghost" href="${basePath}/${encodeURIComponent(item.slug)}">Open</a></td>
-  </tr>`).join('') || '<tr><td colspan="13" class="empty-row">No private opportunities yet.</td></tr>';
+    <td data-col="actions"><div class="toolbar"><a class="button button-ghost" href="${basePath}/${encodeURIComponent(item.slug)}">Open</a><button class="button button-ghost" data-lead-watch="${item.id}" data-enabled="${item.watchlist ? '1' : '0'}">${item.watchlist ? 'Watching' : 'Watch'}</button><button class="button button-ghost" data-lead-crm="${item.id}">CRM</button></div></td>
+  </tr>`).join('') || '<tr><td colspan="15" class="empty-row">No business intelligence leads yet.</td></tr>';
 }
 
 function privateSourceRows(sources = []) {
@@ -1338,15 +1363,20 @@ function privateFilterForm(filters = {}, params = new URLSearchParams()) {
     <h3>Advanced filters</h3>
     <div class="field"><label>Keyword</label><input name="keyword" value="${escapeHtml(params.get('keyword') || '')}" placeholder="Company, service, city..."></div>
     <div class="field"><label>Country</label><select name="country"><option value="">All</option>${selectOptions(filters.countries || [], params.get('country'))}</select></div>
+    <div class="field"><label>Company</label><select name="company"><option value="">All</option>${selectOptions(filters.companies || [], params.get('company'))}</select></div>
     <div class="field"><label>Industry</label><select name="industry"><option value="">All</option>${selectOptions(filters.industries || [], params.get('industry'))}</select></div>
+    <div class="field"><label>Building type</label><select name="building_type"><option value="">All</option>${selectOptions(filters.building_types || [], params.get('building_type'))}</select></div>
+    <div class="field"><label>Lead type</label><select name="lead_type"><option value="">All</option>${selectOptions(filters.lead_types || [], params.get('lead_type'))}</select></div>
     <div class="field"><label>Lead category</label><select name="lead_category"><option value="">All</option>${selectOptions(filters.lead_categories || [], params.get('lead_category'))}</select></div>
     <div class="field"><label>Service</label><select name="service"><option value="">All</option>${selectOptions(filters.services || [], params.get('service'))}</select></div>
     <div class="field"><label>Status</label><select name="status"><option value="">All</option>${selectOptions(filters.statuses || [], params.get('status'))}</select></div>
+    <div class="field"><label>CRM status</label><select name="crm_status"><option value="">All</option>${selectOptions(filters.crm_statuses || [], params.get('crm_status'))}</select></div>
     <div class="field"><label>Source</label><select name="source_id"><option value="">All</option>${(filters.sources || []).map((source) => option(String(source.id), params.get('source_id'), source.name)).join('')}</select></div>
-    <div class="field-row"><div class="field"><label>State</label><input name="state" value="${escapeHtml(params.get('state') || '')}"></div><div class="field"><label>City</label><input name="city" value="${escapeHtml(params.get('city') || '')}"></div></div>
+    <div class="field-row"><div class="field"><label>State / UT</label><select name="state"><option value="">All</option>${selectOptions(filters.states || [], params.get('state'))}</select></div><div class="field"><label>City</label><input name="city" value="${escapeHtml(params.get('city') || '')}"></div></div>
     <div class="field-row"><div class="field"><label>Budget min</label><input type="number" name="min_budget" value="${escapeHtml(params.get('min_budget') || '')}"></div><div class="field"><label>Budget max</label><input type="number" name="max_budget" value="${escapeHtml(params.get('max_budget') || '')}"></div></div>
     <div class="field-row"><div class="field"><label>Deadline after</label><input type="date" name="deadline_after" value="${escapeHtml(params.get('deadline_after') || '')}"></div><div class="field"><label>Deadline before</label><input type="date" name="deadline_before" value="${escapeHtml(params.get('deadline_before') || '')}"></div></div>
     <div class="field"><label>AI match score</label><input type="number" name="min_score" min="0" max="100" value="${escapeHtml(params.get('min_score') || '')}"></div>
+    <div class="field"><label>Watchlist</label><select name="watchlist"><option value="">All</option>${option('1', params.get('watchlist'), 'Watchlisted only')}${option('0', params.get('watchlist'), 'Not watchlisted')}</select></div>
     <div class="field"><label>Sort</label><select name="sort">${['updated:desc','score:desc','deadline:asc','company:asc','country:asc'].map((item) => option(item, params.get('sort') || 'updated:desc', item)).join('')}</select></div>
     <button class="button button-gold">Apply filters</button>
   </form>`;
@@ -1361,19 +1391,20 @@ async function renderPrivateOpportunities() {
   const opportunities = data.opportunities || { items: [], pagination: { page: 1, pages: 1, total: 0 } };
   app.innerHTML = `<section class="page dense-page">
     <div class="section-heading dense-heading">
-      <div><p class="eyebrow">Admin-only business development</p><h1>Lead Finder</h1></div>
-      <p>Internal lead finder for private building maintenance, facility management, AMC, facade, glass cleaning, and rope access opportunities.</p>
+      <div><p class="eyebrow">Admin-only business intelligence</p><h1>AI Business Intelligence & Lead Discovery Engine India</h1></div>
+      <p>Discover potential building maintenance business opportunities from official company pages, vendor registration portals, public RFQ/RFP notices, procurement pages, and permitted public feeds.</p>
     </div>
     ${dashboardNav()}
     <div class="metric-grid dashboard-metrics">${privateMetricGrid(data.dashboard)}</div>
     <div class="panel lead-finder-panel">
-      <div class="section-heading compact"><div><p class="eyebrow">Lead Finder</p><h2>Target Segments</h2></div><p>Find private building maintenance leads by client segment and vendor registration opportunities.</p></div>
+      <div class="section-heading compact"><div><p class="eyebrow">India Lead Finder</p><h2>Target Segments</h2></div><p>Search every state and union territory for public business signals across building owners, facilities teams, property developers, and vendor portals.</p></div>
       ${leadCategoryCards(data.filters, params, basePath)}
     </div>
+    ${businessLeadAnalytics(data.dashboard)}
     <div class="dense-toolbar sticky-toolbar">
-      <form id="private-quick-search" class="dense-search"><input name="keyword" value="${escapeHtml(params.get('keyword') || '')}" placeholder="Search private opportunities..."><button class="button button-gold">Search</button></form>
-      <div class="toolbar"><span class="chip">${opportunities.pagination.total} private opportunities</span><a class="button button-outline" href="/admin/contracts">Government Contracts</a>${columnSelector(privateOpportunityColumns, 'private-opportunities')}</div>
-      <div class="chip-row quick-filters">${['Rope Access','Glass Cleaning','Building Maintenance','AMC','Facility Management'].map((service) => { const query = new URLSearchParams(params); query.set('service', service); query.set('page','1'); return `<a class="chip ${params.get('service') === service ? 'chip-gold' : ''}" href="${basePath}?${query}">${escapeHtml(service)}</a>`; }).join('')}</div>
+      <form id="private-quick-search" class="dense-search"><input name="keyword" value="${escapeHtml(params.get('keyword') || '')}" placeholder="Search company, service, city, contact..."><button class="button button-gold">Search</button></form>
+      <div class="toolbar"><span class="chip">${opportunities.pagination.total} India BI leads</span><button class="button button-outline" id="save-lead-search">Save Search</button><a class="button button-outline" href="/admin/contracts">Government Contracts</a>${columnSelector(privateOpportunityColumns, 'private-opportunities')}</div>
+      <div class="chip-row quick-filters">${['Rope Access','Glass Cleaning','Building Maintenance','AMC','Facility Management','vendor_registration','procurement_portal'].map((service) => { const query = new URLSearchParams(params); if (service.includes('_')) query.set('lead_type', service); else query.set('service', service); query.set('page','1'); return `<a class="chip ${(params.get('service') === service || params.get('lead_type') === service) ? 'chip-gold' : ''}" href="${basePath}?${query}">${escapeHtml(statusText(service))}</a>`; }).join('')}</div>
     </div>
     <details class="filter-drawer"><summary class="button button-outline">Advanced filters</summary>${privateFilterForm(data.filters, params)}</details>
     <div class="dense-table-wrap virtual-table">
@@ -1389,9 +1420,9 @@ async function renderPrivateOpportunities() {
     </div>
     <div class="admin-grid" style="margin-top:20px">
       <form class="panel" id="private-source-form">
-        <h2>Add Private Source</h2>
+        <h2>Add Official/Public Lead Source</h2>
         <div class="field"><label>Name</label><input name="name" required placeholder="Mall vendor portal"></div>
-        <div class="field-row"><div class="field"><label>Source type</label><select name="source_type">${['procurement_portal','vendor_registration','rfq_page','rfp_page','tender_page','rss','json','xml','csv'].map((item)=>option(item,'',statusText(item))).join('')}</select></div><div class="field"><label>Schedule</label><select name="schedule">${['hourly','daily','weekly','monthly'].map((item)=>option(item,'hourly',item)).join('')}</select></div></div>
+        <div class="field-row"><div class="field"><label>Source type</label><select name="source_type">${['procurement_portal','vendor_registration','rfq_page','rfp_page','tender_page','company_website','public_notice','rss','json','xml','csv'].map((item)=>option(item,'',statusText(item))).join('')}</select></div><div class="field"><label>Schedule</label><select name="schedule">${['hourly','daily','weekly','monthly'].map((item)=>option(item,'hourly',item)).join('')}</select></div></div>
         <div class="field"><label>Official source URL</label><input name="source_url" type="url" required placeholder="Official company procurement page"></div>
         <div class="field"><label>Official API / RSS / XML / JSON / CSV URL</label><input name="endpoint_url" type="url" placeholder="Only if publicly available and permitted"></div>
         <div class="field-row"><div class="field"><label>Country</label><input name="country" value="India"></div><div class="field"><label>State</label><input name="state"></div></div>
@@ -1403,20 +1434,25 @@ async function renderPrivateOpportunities() {
         <button class="button button-gold" id="private-source-submit">Add Source</button>
       </form>
       <form class="panel" id="private-opportunity-form">
-        <h2>Add Manual Private Opportunity</h2>
+        <h2>Add Verified Business Lead</h2>
         <div class="field-row"><div class="field"><label>Company</label><input name="company" required></div><div class="field"><label>Opportunity</label><input name="title" required></div></div>
         <div class="field"><label>Description</label><textarea name="description" required></textarea></div>
+        <div class="field-row"><div class="field"><label>Lead type</label><select name="lead_type">${(data.filters.lead_types || []).map((item)=>option(item,'business_intelligence',statusText(item))).join('')}</select></div><div class="field"><label>Building type</label><input name="building_type" placeholder="Shopping Mall, IT Park, Hospital"></div></div>
         <div class="field-row"><div class="field"><label>Service</label><input name="required_services" placeholder="Rope Access, Glass Cleaning"></div><div class="field"><label>Industry</label><input name="industry" value="Commercial Building Maintenance"></div></div>
-        <div class="field-row"><div class="field"><label>Country</label><input name="country" value="India"></div><div class="field"><label>City</label><input name="city"></div></div>
+        <div class="field-row"><div class="field"><label>Country</label><input name="country" value="India"></div><div class="field"><label>State / UT</label><select name="state"><option value="">Select</option>${(data.filters.states || []).map((state)=>option(state,'')).join('')}</select></div></div>
+        <div class="field-row"><div class="field"><label>City</label><input name="city"></div><div class="field"><label>Public contact email</label><input name="public_contact_email" type="email"></div></div>
+        <div class="field-row"><div class="field"><label>Public contact phone</label><input name="public_contact_phone"></div><div class="field"><label>Company profile URL</label><input name="company_profile_url" type="url"></div></div>
         <div class="field-row"><div class="field"><label>Deadline</label><input name="deadline" type="date"></div><div class="field"><label>Estimated value</label><input name="budget_value" type="number"></div></div>
         <div class="field"><label>Original source link</label><input name="source_url" type="url" required></div>
         <div class="field"><label>Vendor registration link</label><input name="vendor_registration_url" type="url"></div>
+        <div class="field"><label>Procurement portal link</label><input name="procurement_portal_url" type="url"></div>
+        <div class="field-row"><div class="field"><label>Latitude</label><input name="map_latitude" type="number" step="any"></div><div class="field"><label>Longitude</label><input name="map_longitude" type="number" step="any"></div></div>
         <div class="field"><label>Internal notes</label><textarea name="internal_notes"></textarea></div>
         <button class="button button-gold">Add Opportunity</button>
       </form>
     </div>
     <div class="panel" style="margin-top:20px">
-      <div class="section-heading compact"><div><p class="eyebrow">Private source control</p><h2>Sources</h2></div><p>Use only official company portals, public RFQ/RFP pages, vendor registration portals, or permitted public feeds.</p></div>
+      <div class="section-heading compact"><div><p class="eyebrow">Source control</p><h2>Official & Public Sources</h2></div><p>Use only official company pages, public RFQ/RFP pages, vendor registration portals, procurement notices, or permitted RSS/JSON/XML/CSV feeds. Do not add sources that prohibit automated access.</p></div>
       <div class="table-wrap dense-table-wrap"><table class="dense-table"><thead><tr><th>Source</th><th>Country</th><th>Industry</th><th>Health</th><th>HTTP</th><th>Imported</th><th>Failures</th><th>Last Sync</th><th>Actions</th></tr></thead><tbody>${privateSourceRows(data.dashboard.sources || [])}</tbody></table></div>
     </div>
     <div class="panel" style="margin-top:20px"><h2>Source Logs</h2><div id="private-source-logs" class="list"><div class="empty compact-empty">Select View Logs on a private source.</div></div></div>
@@ -1425,7 +1461,25 @@ async function renderPrivateOpportunities() {
   document.querySelector('#private-filters').onsubmit = (event) => { event.preventDefault(); const query = new URLSearchParams(new FormData(event.currentTarget)); query.set('page_size', params.get('page_size') || '100'); query.set('page','1'); location.href = `${basePath}?${query}`; };
   document.querySelector('#private-prev').onclick = () => { const query = new URLSearchParams(location.search); query.set('page', opportunities.pagination.page - 1); location.href = `${basePath}?${query}`; };
   document.querySelector('#private-next').onclick = () => { const query = new URLSearchParams(location.search); query.set('page', opportunities.pagination.page + 1); location.href = `${basePath}?${query}`; };
+  document.querySelector('#save-lead-search').onclick = async () => {
+    const name = prompt('Name this saved lead search');
+    if (!name) return;
+    const filters = Object.fromEntries([...new URLSearchParams(location.search).entries()]);
+    await api('/admin/private-opportunities/saved-searches', { method: 'POST', body: JSON.stringify({ name, filters, alert_enabled: true }) });
+    toast('Lead search saved with alerts enabled');
+  };
   bindDenseTableControls(app);
+  document.querySelectorAll('[data-lead-watch]').forEach((el) => el.onclick = async () => {
+    const enabled = el.dataset.enabled !== '1';
+    await api(`/admin/private-opportunities/${el.dataset.leadWatch}/watchlist`, { method: 'POST', body: JSON.stringify({ enabled }) });
+    toast(enabled ? 'Lead added to watchlist' : 'Lead removed from watchlist');
+    setTimeout(() => location.reload(), 400);
+  });
+  document.querySelectorAll('[data-lead-crm]').forEach((el) => el.onclick = async () => {
+    const result = await api(`/admin/private-opportunities/${el.dataset.leadCrm}/convert-crm`, { method: 'POST', body: '{}' });
+    toast(result.already_converted ? 'Lead is already in CRM' : 'Lead converted to CRM');
+    setTimeout(() => location.reload(), 500);
+  });
   const privateSources = data.dashboard.sources || [];
   document.querySelector('#private-source-form').onsubmit = async (event) => {
     event.preventDefault();
@@ -1484,10 +1538,12 @@ async function renderPrivateOpportunityDetail() {
   const { opportunity } = await api(`/admin/private-opportunities/${encodeURIComponent(identifier)}`);
   const originalButton = opportunity.original_source_url ? `<a class="button button-gold" href="${escapeHtml(opportunity.original_source_url)}" target="_blank" rel="noopener noreferrer">Open Original Source</a>` : '';
   const vendorButton = opportunity.vendor_registration_url ? `<a class="button button-outline" href="${escapeHtml(opportunity.vendor_registration_url)}" target="_blank" rel="noopener noreferrer">Vendor Registration</a>` : '';
+  const profileButton = opportunity.company_profile_url ? `<a class="button button-outline" href="${escapeHtml(opportunity.company_profile_url)}" target="_blank" rel="noopener noreferrer">Company Profile</a>` : '';
+  const portalButton = opportunity.procurement_portal_url ? `<a class="button button-outline" href="${escapeHtml(opportunity.procurement_portal_url)}" target="_blank" rel="noopener noreferrer">Procurement Portal</a>` : '';
   app.innerHTML = `<section class="page detail-hero">
-    <p class="eyebrow">Private opportunity</p>
+    <p class="eyebrow">India business intelligence lead</p>
     <h1>${escapeHtml(opportunity.title)}</h1>
-    <div class="chip-row"><span class="score-pill">${opportunity.match_score}</span><span class="status">${escapeHtml(statusText(opportunity.status))}</span><span class="chip">${escapeHtml(opportunity.company)}</span><span class="chip">${escapeHtml(opportunity.country || 'Worldwide')}</span>${(opportunity.required_services || []).map((service) => `<span class="chip chip-gold">${escapeHtml(service)}</span>`).join('')}</div>
+    <div class="chip-row"><span class="score-pill">${opportunity.match_score}</span><span class="status">${escapeHtml(statusText(opportunity.lead_type || 'business_intelligence'))}</span><span class="status">${escapeHtml(statusText(opportunity.status))}</span><span class="chip">${escapeHtml(opportunity.company)}</span><span class="chip">${escapeHtml(opportunity.country || 'India')}</span>${(opportunity.required_services || []).map((service) => `<span class="chip chip-gold">${escapeHtml(service)}</span>`).join('')}</div>
   </section>
   <section class="page detail-grid">
     <div>
@@ -1499,6 +1555,7 @@ async function renderPrivateOpportunityDetail() {
         ${listPanel('Required Documents', opportunity.required_documents || [])}
         ${listPanel('Submission Checklist', opportunity.submission_checklist || [])}
         ${listPanel('Recommended Skyproz Services', opportunity.recommended_services || [])}
+        <section class="info-panel contract-intel-card"><h3>Lead Score Reason</h3><p>${escapeHtml(opportunity.lead_score_reason || 'No score reason generated yet.')}</p></section>
       </div>
       <section class="ai-panel"><p class="eyebrow">Internal notes</p><h2>Business Development Notes</h2><p>${escapeHtml(opportunity.internal_notes || 'No internal notes added yet.')}</p></section>
     </div>
@@ -1507,18 +1564,24 @@ async function renderPrivateOpportunityDetail() {
       <div class="info-panel">
         <dl class="info-list">
           <div><dt>Company</dt><dd>${escapeHtml(opportunity.company)}</dd></div>
+          <div><dt>Lead type</dt><dd>${escapeHtml(statusText(opportunity.lead_type || 'business_intelligence'))}</dd></div>
           <div><dt>Building type</dt><dd>${escapeHtml(opportunity.building_type || 'Not stated')}</dd></div>
           <div><dt>Industry</dt><dd>${escapeHtml(opportunity.industry || 'Not stated')}</dd></div>
           <div><dt>Location</dt><dd>${escapeHtml([opportunity.city, opportunity.state, opportunity.country].filter(Boolean).join(', ') || 'Worldwide')}</dd></div>
+          <div><dt>Public contact</dt><dd>${escapeHtml([opportunity.public_contact_email, opportunity.public_contact_phone].filter(Boolean).join(' / ') || 'Not available')}</dd></div>
           <div><dt>Estimated value</dt><dd>${money(opportunity.budget_value, opportunity.currency)}</dd></div>
           <div><dt>Deadline</dt><dd>${date(opportunity.deadline)}</dd></div>
+          <div><dt>CRM</dt><dd>${escapeHtml(statusText(opportunity.crm_status || 'not_converted'))}</dd></div>
+          <div><dt>Watchlist</dt><dd>${escapeHtml(opportunity.watchlist ? 'Watching' : 'Not watching')}</dd></div>
           <div><dt>Source</dt><dd>${escapeHtml(opportunity.configured_source_name || opportunity.source_name)}</dd></div>
           <div><dt>Last updated</dt><dd>${date(opportunity.updated_at)}</dd></div>
         </dl>
-        <div class="toolbar" style="margin-top:22px">${originalButton}${vendorButton}<a class="button button-outline" href="${basePath}">Back</a></div>
+        <div class="toolbar" style="margin-top:22px">${originalButton}${vendorButton}${portalButton}${profileButton}<button class="button button-outline" id="detail-watch">${opportunity.watchlist ? 'Remove Watchlist' : 'Add Watchlist'}</button><button class="button button-outline" id="detail-crm">Convert to CRM</button><a class="button button-outline" href="${basePath}">Back</a></div>
       </div>
     </aside>
   </section>`;
+  document.querySelector('#detail-watch').onclick = async () => { await api(`/admin/private-opportunities/${opportunity.id}/watchlist`, { method: 'POST', body: JSON.stringify({ enabled: !opportunity.watchlist }) }); toast('Watchlist updated'); setTimeout(() => location.reload(), 400); };
+  document.querySelector('#detail-crm').onclick = async () => { const result = await api(`/admin/private-opportunities/${opportunity.id}/convert-crm`, { method: 'POST', body: '{}' }); toast(result.already_converted ? 'Lead is already in CRM' : 'Lead converted to CRM'); setTimeout(() => location.reload(), 500); };
 }
 
 async function renderAdmin() {

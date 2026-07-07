@@ -9,16 +9,22 @@ import { importAnalytics, marketplaceSnapshot, runSourceDiscovery } from './serv
 import { connectorWizardSnapshot, detectWizardSource, saveWizardConfiguration, testWizardConfiguration } from './services/connector-wizard.mjs';
 import { generateAnalyticsSnapshot, runSchedulerJob, schedulerHealth } from './jobs.mjs';
 import {
+  convertPrivateOpportunityToCrm,
+  createBusinessLeadSavedSearch,
   createPrivateOpportunity,
   createPrivateSource,
+  deleteBusinessLeadSavedSearch,
   deletePrivateSource,
   getPrivateOpportunity,
   importPrivateSource,
+  listBusinessLeadSavedSearches,
   listPrivateSources,
   privateFilterOptions,
   privateOpportunityDashboard,
   privateSourceLogs,
   searchPrivateOpportunities,
+  setPrivateOpportunityAlert,
+  setPrivateOpportunityWatchlist,
   testPrivateSource,
   updatePrivateOpportunity,
   updatePrivateSource
@@ -365,6 +371,40 @@ export async function handleApi(request, response, url) {
         const opportunity = createPrivateOpportunity(await readJson(request));
         auditLog(adminUser, request, 'private_opportunity.create', 'private_opportunities', opportunity.id, { company: opportunity.company });
         sendJson(response, 201, { opportunity }); return true;
+      }
+      if (request.method === 'GET' && pathname === '/api/contract-finder/admin/private-opportunities/saved-searches') {
+        sendJson(response, 200, { items: listBusinessLeadSavedSearches(adminUser.id) }); return true;
+      }
+      if (request.method === 'POST' && pathname === '/api/contract-finder/admin/private-opportunities/saved-searches') {
+        const savedSearch = createBusinessLeadSavedSearch(await readJson(request), adminUser);
+        auditLog(adminUser, request, 'private_opportunity.saved_search.create', 'business_lead_saved_searches', savedSearch.id, { name: savedSearch.name });
+        sendJson(response, 201, { saved_search: savedSearch }); return true;
+      }
+      privateRoute = match(pathname, /^\/api\/contract-finder\/admin\/private-opportunities\/saved-searches\/(\d+)$/);
+      if (privateRoute && request.method === 'DELETE') {
+        deleteBusinessLeadSavedSearch(Number(privateRoute[0]), adminUser);
+        auditLog(adminUser, request, 'private_opportunity.saved_search.delete', 'business_lead_saved_searches', privateRoute[0], {});
+        sendJson(response, 200, { ok: true }); return true;
+      }
+      privateRoute = match(pathname, /^\/api\/contract-finder\/admin\/private-opportunities\/(\d+)\/watchlist$/);
+      if (privateRoute && request.method === 'POST') {
+        const body = await readJson(request);
+        const opportunity = setPrivateOpportunityWatchlist(Number(privateRoute[0]), body.enabled !== false);
+        auditLog(adminUser, request, 'private_opportunity.watchlist', 'private_opportunities', privateRoute[0], { enabled: opportunity.watchlist });
+        sendJson(response, 200, { opportunity }); return true;
+      }
+      privateRoute = match(pathname, /^\/api\/contract-finder\/admin\/private-opportunities\/(\d+)\/alerts$/);
+      if (privateRoute && request.method === 'POST') {
+        const body = await readJson(request);
+        const opportunity = setPrivateOpportunityAlert(Number(privateRoute[0]), body.enabled !== false);
+        auditLog(adminUser, request, 'private_opportunity.alert', 'private_opportunities', privateRoute[0], { enabled: opportunity.alert_enabled });
+        sendJson(response, 200, { opportunity }); return true;
+      }
+      privateRoute = match(pathname, /^\/api\/contract-finder\/admin\/private-opportunities\/(\d+)\/convert-crm$/);
+      if (privateRoute && request.method === 'POST') {
+        const result = convertPrivateOpportunityToCrm(Number(privateRoute[0]), adminUser);
+        auditLog(adminUser, request, 'private_opportunity.convert_crm', 'private_opportunities', privateRoute[0], { crm_record_id: result.record?.id || result.crm_record_id });
+        sendJson(response, 200, result); return true;
       }
       privateRoute = match(pathname, /^\/api\/contract-finder\/admin\/private-opportunities\/([^/]+)$/);
       if (privateRoute && request.method === 'GET') {
