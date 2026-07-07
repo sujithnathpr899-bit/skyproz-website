@@ -259,16 +259,30 @@ function dashboardNav() {
 }
 
 const erpModuleLabels = {
+  dashboard: 'Dashboard',
   crm: 'CRM',
+  customers: 'Customers',
+  companies: 'Companies',
   quotations: 'Quotations',
+  'proforma-invoices': 'Proforma Invoices',
   invoices: 'GST Invoices',
   'payment-receipts': 'Payment Receipts',
   'work-orders': 'Work Orders',
   'job-cards': 'Job Cards',
   amc: 'AMC Management',
+  'purchase-orders': 'Purchase Orders',
+  vendors: 'Vendors',
   inventory: 'Inventory',
   expenses: 'Expenses',
+  'financial-dashboard': 'Financial Dashboard',
   reports: 'Reports',
+  documents: 'Documents',
+  'company-profile': 'Company Profile',
+  users: 'Users',
+  'roles-permissions': 'Roles & Permissions',
+  'audit-logs': 'Audit Logs',
+  'email-templates': 'Email Templates',
+  'whatsapp-templates': 'WhatsApp Templates',
   settings: 'Settings'
 };
 
@@ -281,7 +295,8 @@ function adminPortalSidebar() {
     ['Connector Wizard', '/admin/connector-wizard'],
     ['Source Discovery', '/admin/source-discovery']
   ];
-  const erp = Object.entries(erpModuleLabels).filter(([key]) => key !== 'settings').map(([key, label]) => [label, `/admin/${key}`]);
+  const erp = ['crm','quotations','proforma-invoices','invoices','payment-receipts','work-orders','job-cards','amc','purchase-orders','vendors','inventory','expenses','financial-dashboard','reports','documents','company-profile','users','roles-permissions','audit-logs','email-templates','whatsapp-templates']
+    .map((key) => [erpModuleLabels[key], `/admin/${key}`]);
   return `<div class="panel dense-panel">
     <div class="section-heading compact"><div><p class="eyebrow">Private admin portal</p><h2>/admin</h2></div><p>Internal modules are hidden from the public website and require administrator access.</p></div>
     <div class="dashboard-dense-grid">
@@ -1508,12 +1523,23 @@ async function renderPrivateOpportunityDetail() {
 
 async function renderAdmin() {
   if (!(await requireLogin())) return; if(currentUser.role!=='admin'){app.innerHTML='<section class="page"><div class="empty">Administrator access required.</div></section>';return;}
-  const [analytics,sources,users,connectors,keywords]=await Promise.all([api('/admin/analytics'),api('/admin/sources'),api('/admin/users'),api('/admin/connectors'),api('/admin/bot/keywords')]);
+  const [analytics,sources,users,connectors,keywords,erp]=await Promise.all([api('/admin/analytics'),api('/admin/sources'),api('/admin/users'),api('/admin/connectors'),api('/admin/bot/keywords'),api('/admin/erp/dashboard')]);
   const bot = analytics.bot || {};
   app.innerHTML=`<section class="page">
     <div class="section-heading"><div><p class="eyebrow">Operations control</p><h1>Admin Panel</h1></div><div class="toolbar"><button class="button button-outline" id="snapshot">Save analytics</button><button class="button button-danger" id="dedupe">Remove duplicates</button></div></div>
     ${dashboardNav()}
     ${adminPortalSidebar()}
+    <div class="panel dense-panel" style="margin-top:8px">
+      <div class="section-heading compact"><div><p class="eyebrow">ERP dashboard</p><h2>Financial Operations</h2></div><p>Live ERP totals from invoices, receipts, expenses and purchase orders.</p></div>
+      <div class="metric-grid compact-metrics">
+        <div class="metric"><strong>${erp.total_records}</strong><span>ERP Records</span></div>
+        <div class="metric"><strong>${money(erp.revenue, 'INR')}</strong><span>Revenue</span></div>
+        <div class="metric"><strong>${money(erp.expenses, 'INR')}</strong><span>Expenses</span></div>
+        <div class="metric"><strong>${money(erp.profit, 'INR')}</strong><span>Profit</span></div>
+        <div class="metric"><strong>${money(erp.outstanding, 'INR')}</strong><span>Outstanding</span></div>
+        <div class="metric"><strong>${money(erp.gst, 'INR')}</strong><span>GST</span></div>
+      </div>
+    </div>
     <div class="dense-toolbar sticky-toolbar">
       <div class="toolbar"><button class="button button-gold" id="run-bot">Run AI Bot Now</button>${['hourly','daily','weekly','monthly'].map((job)=>`<button class="button button-ghost" data-run-job="${job}">Run ${job}</button>`).join('')}</div>
     </div>
@@ -1599,30 +1625,224 @@ async function renderAdmin() {
   document.querySelector('#contract-form').onsubmit=async(event)=>{event.preventDefault();const values=Object.fromEntries(new FormData(event.currentTarget));values.buyer_type='government';values.work_mode='onsite';values.posted_date=new Date().toISOString();await api('/admin/contracts',{method:'POST',body:JSON.stringify(values)});toast('Contract added');event.currentTarget.reset();};
 }
 
+function erpIdentifierParts() {
+  const [moduleKey = 'crm', recordId = ''] = String(identifier || 'crm').split('/');
+  return { moduleKey, recordId };
+}
+
+function erpValue(record, field) {
+  if (!record) return '';
+  return record[field.key] ?? record.data?.[field.key] ?? '';
+}
+
+function erpFieldInput(field, record = null) {
+  const value = erpValue(record, field);
+  if (field.type === 'textarea') return `<label>${escapeHtml(field.label)}<textarea name="${escapeHtml(field.key)}" ${field.required ? 'required' : ''}>${escapeHtml(value)}</textarea></label>`;
+  if (field.type === 'select') return `<label>${escapeHtml(field.label)}<select name="${escapeHtml(field.key)}" ${field.required ? 'required' : ''}>${(field.options || []).map((optionValue) => option(optionValue, value, statusText(optionValue))).join('')}</select></label>`;
+  return `<label>${escapeHtml(field.label)}<input name="${escapeHtml(field.key)}" type="${escapeHtml(field.type || 'text')}" value="${escapeHtml(value)}" ${field.required ? 'required' : ''}></label>`;
+}
+
+function erpLineItemRows(record = null) {
+  const items = record?.line_items?.length ? record.line_items : [
+    { description: '', hsn_sac: '', quantity: 1, unit: 'nos', unit_price: 0, gst_rate: 18 },
+    { description: '', hsn_sac: '', quantity: 1, unit: 'nos', unit_price: 0, gst_rate: 18 },
+    { description: '', hsn_sac: '', quantity: 1, unit: 'nos', unit_price: 0, gst_rate: 18 }
+  ];
+  return `<div class="dense-table-wrap"><table class="dense-table"><thead><tr><th>Description</th><th>HSN/SAC</th><th>Qty</th><th>Unit</th><th>Rate</th><th>GST %</th></tr></thead><tbody>${items.map((item, index) => `<tr>
+    <td><input name="item_description_${index}" value="${escapeHtml(item.description)}"></td>
+    <td><input name="item_hsn_sac_${index}" value="${escapeHtml(item.hsn_sac)}"></td>
+    <td><input name="item_quantity_${index}" type="number" step="0.01" value="${escapeHtml(item.quantity || 1)}"></td>
+    <td><input name="item_unit_${index}" value="${escapeHtml(item.unit || 'nos')}"></td>
+    <td><input name="item_unit_price_${index}" type="number" step="0.01" value="${escapeHtml(item.unit_price || 0)}"></td>
+    <td><input name="item_gst_rate_${index}" type="number" step="0.01" value="${escapeHtml(item.gst_rate ?? 18)}"></td>
+  </tr>`).join('')}</tbody></table></div>`;
+}
+
+function erpForm(module, record = null) {
+  return `<form class="panel" id="erp-form">
+    <div class="section-heading compact"><div><p class="eyebrow">${record ? 'Edit' : 'Create'}</p><h2>${record ? escapeHtml(record.record_number) : `New ${escapeHtml(module.label)}`}</h2></div></div>
+    <div class="admin-grid">${module.fields.map((field) => `<div class="field">${erpFieldInput(field, record)}</div>`).join('')}</div>
+    ${module.lineItems ? `<h3>Line Items</h3>${erpLineItemRows(record)}` : ''}
+    ${module.key === 'documents' ? '<div class="field"><label>Upload File<input name="file_upload" type="file"></label></div>' : ''}
+    <div class="toolbar" style="margin-top:16px">
+      <button class="button button-gold" type="submit">${record ? 'Update' : 'Create'}</button>
+      ${record ? `<a class="button button-outline" href="/admin/${module.key}/${record.id}">View</a><a class="button button-ghost" href="/admin/${module.key}">Cancel</a>` : ''}
+    </div>
+  </form>`;
+}
+
+function erpPayloadFromForm(form, module) {
+  const formData = new FormData(form);
+  const payload = {};
+  for (const field of module.fields) payload[field.key] = formData.get(field.key) || '';
+  if (module.lineItems) {
+    payload.line_items = Array.from({ length: 12 }, (_, index) => ({
+      description: formData.get(`item_description_${index}`) || '',
+      hsn_sac: formData.get(`item_hsn_sac_${index}`) || '',
+      quantity: Number(formData.get(`item_quantity_${index}`) || 0),
+      unit: formData.get(`item_unit_${index}`) || 'nos',
+      unit_price: Number(formData.get(`item_unit_price_${index}`) || 0),
+      gst_rate: Number(formData.get(`item_gst_rate_${index}`) || 0),
+      gst_type: payload.gst_type
+    })).filter((item) => item.description);
+  }
+  return payload;
+}
+
+async function erpPayloadWithUpload(form, module) {
+  const payload = erpPayloadFromForm(form, module);
+  const file = form.querySelector('[name="file_upload"]')?.files?.[0];
+  if (file) {
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+    payload.file_upload = {
+      filename: file.name,
+      content_type: file.type || 'application/octet-stream',
+      size_bytes: file.size,
+      body_base64: String(dataUrl).split(',')[1] || ''
+    };
+    if (!payload.file_name) payload.file_name = file.name;
+  }
+  return payload;
+}
+
+function erpRows(module, items = []) {
+  return items.map((record) => `<tr>
+    <td><a href="/admin/${module.key}/${record.id}">${escapeHtml(record.record_number)}</a></td>
+    <td>${escapeHtml(compactText(record.title, 64))}</td>
+    <td><span class="status ${escapeHtml(record.status)}">${escapeHtml(statusText(record.status))}</span></td>
+    <td>${escapeHtml(compactText(record.customer_name || record.company_name || '-', 34))}</td>
+    <td>${record.total_amount ? money(record.total_amount, record.currency) : '-'}</td>
+    <td>${shortDate(record.due_date)}</td>
+    <td class="actions-cell"><a class="button button-ghost" href="/admin/${module.key}/${record.id}">View</a><a class="button button-ghost" href="/admin/${module.key}?edit=${record.id}">Edit</a><button class="button button-danger" data-erp-delete="${record.id}" type="button">Delete</button></td>
+  </tr>`).join('');
+}
+
+function erpFeatureChips(module) {
+  const features = ['Dashboard','List','Create','Edit','View','Delete','Search','Filters','Sorting','Pagination','CSV','Excel','Print','PDF'];
+  return `<div class="chip-row">${features.concat(module.actions || []).slice(0, 18).map((item) => `<span class="chip">${escapeHtml(statusText(item))}</span>`).join('')}</div>`;
+}
+
+function erpDetailHtml(module, record) {
+  const actionButtons = (module.actions || []).map((action) => `<button class="button button-gold" data-erp-action="${escapeHtml(action)}" type="button">${escapeHtml(statusText(action))}</button>`).join('');
+  return `<section class="page">
+    <div class="section-heading"><div><p class="eyebrow">${escapeHtml(module.label)}</p><h1>${escapeHtml(record.title)}</h1></div><div class="toolbar"><a class="button button-outline" href="/admin/${module.key}">Back</a><a class="button button-ghost" href="/admin/${module.key}?edit=${record.id}">Edit</a></div></div>
+    ${dashboardNav()}
+    <div class="panel dense-panel">
+      <div class="metric-grid compact-metrics">
+        <div class="metric"><strong>${escapeHtml(record.record_number)}</strong><span>Record Number</span></div>
+        <div class="metric"><strong>${escapeHtml(statusText(record.status))}</strong><span>Status</span></div>
+        <div class="metric"><strong>${money(record.total_amount, record.currency)}</strong><span>Total</span></div>
+        <div class="metric"><strong>${shortDate(record.due_date)}</strong><span>Due / Renewal</span></div>
+      </div>
+      <div class="toolbar" style="margin-top:16px">
+        <a class="button button-ghost" target="_blank" rel="noopener" href="/api/contract-finder/admin/erp/${module.key}/${record.id}/print">Print</a>
+        <a class="button button-ghost" href="/api/contract-finder/admin/erp/${module.key}/${record.id}/pdf">PDF</a>
+        <a class="button button-ghost" href="/api/contract-finder/admin/erp/${module.key}/${record.id}/word">Word</a>
+        ${actionButtons}
+      </div>
+    </div>
+    <div class="admin-grid" style="margin-top:12px">
+      <div class="panel"><h2>Record Details</h2><dl class="info-list">
+        <div><dt>Customer</dt><dd>${escapeHtml(record.customer_name || '-')}</dd></div>
+        <div><dt>Company</dt><dd>${escapeHtml(record.company_name || '-')}</dd></div>
+        <div><dt>Contact</dt><dd>${escapeHtml(record.contact_name || '-')}</dd></div>
+        <div><dt>Issue Date</dt><dd>${escapeHtml(record.issue_date || '-')}</dd></div>
+        <div><dt>Assigned To</dt><dd>${escapeHtml(record.assigned_to || '-')}</dd></div>
+      </dl></div>
+      <div class="panel"><h2>Module Data</h2><dl class="info-list">${Object.entries(record.data || {}).filter(([key]) => !['features','module_summary'].includes(key)).map(([key, value]) => `<div><dt>${escapeHtml(statusText(key))}</dt><dd>${escapeHtml(Array.isArray(value) ? value.join(', ') : value || '-')}</dd></div>`).join('')}</dl></div>
+    </div>
+    ${record.line_items?.length ? `<div class="panel" style="margin-top:12px"><h2>Line Items</h2><div class="dense-table-wrap"><table class="dense-table"><thead><tr><th>Description</th><th>HSN/SAC</th><th>Qty</th><th>Rate</th><th>GST</th><th>Total</th></tr></thead><tbody>${record.line_items.map((item) => `<tr><td>${escapeHtml(item.description)}</td><td>${escapeHtml(item.hsn_sac)}</td><td>${item.quantity}</td><td>${money(item.unit_price, record.currency)}</td><td>${item.gst_rate}%</td><td>${money(item.total, record.currency)}</td></tr>`).join('')}</tbody></table></div></div>` : ''}
+    <div class="admin-grid" style="margin-top:12px">
+      <div class="panel"><h2>Documents</h2><div class="list compact-list">${(record.documents || []).map((doc) => `<div class="list-item"><div><h3>${escapeHtml(doc.filename)}</h3><p>${escapeHtml(doc.document_type)} | ${Number(doc.size_bytes || 0).toLocaleString()} bytes</p></div><span>${shortDate(doc.created_at)}</span></div>`).join('') || '<div class="empty">No documents attached to this record.</div>'}</div></div>
+      <div class="panel"><h2>Activity</h2><div class="list compact-list">${(record.activity || []).map((item) => `<div class="list-item"><div><h3>${escapeHtml(statusText(item.action))}</h3><p>${escapeHtml(item.note || '')}</p></div><span>${shortDate(item.created_at)}</span></div>`).join('') || '<div class="empty">No activity yet.</div>'}</div></div>
+    </div>
+  </section>`;
+}
+
 async function renderErpModule() {
   if (!(await requireLogin())) return;
   if (currentUser.role !== 'admin') {
     app.innerHTML = '<section class="page"><div class="empty">Administrator access required.</div></section>';
     return;
   }
-  const label = erpModuleLabels[identifier] || 'Business Module';
-  app.innerHTML = `<section class="page">
-    <div class="section-heading">
-      <div><p class="eyebrow">ERP</p><h1>${escapeHtml(label)}</h1></div>
-      <p>Internal Skyproz business operations workspace. This page is private, noindex, and available only to administrators.</p>
-    </div>
+  const { moduleKey, recordId } = erpIdentifierParts();
+  if (recordId) {
+    const { record } = await api(`/admin/erp/${moduleKey}/${encodeURIComponent(recordId)}`);
+    const modules = await api('/admin/erp/modules');
+    const module = modules.items.find((item) => item.key === record.module_key) || { key: record.module_key, label: erpModuleLabels[record.module_key] || record.module_key, actions: [] };
+    app.innerHTML = erpDetailHtml(module, record);
+    document.querySelectorAll('[data-erp-action]').forEach((el) => el.onclick = async () => {
+      const result = await api(`/admin/erp/${module.key}/${record.id}/actions/${el.dataset.erpAction}`, { method: 'POST', body: '{}' });
+      toast(`Created ${result.created.record_number}`);
+    });
+    return;
+  }
+  const params = new URLSearchParams(location.search);
+  if (!params.get('page_size')) params.set('page_size', '25');
+  const [modules, dashboard, data] = await Promise.all([
+    api('/admin/erp/modules'),
+    api('/admin/erp/dashboard'),
+    api(`/admin/erp/${moduleKey}?${params}`)
+  ]);
+  const module = data.module;
+  const editId = params.get('edit');
+  const editRecord = editId ? (await api(`/admin/erp/${module.key}/${editId}`)).record : null;
+  const sortLink = (label, sort) => { const query = new URLSearchParams(params); query.set('sort', sort); return `<a href="/admin/${module.key}?${query}">${label}</a>`; };
+  app.innerHTML = `<section class="page dense-page">
+    <div class="section-heading"><div><p class="eyebrow">ERP</p><h1>${escapeHtml(module.label)}</h1></div><p>${escapeHtml(module.summary)}</p></div>
     ${dashboardNav()}
     ${adminPortalSidebar()}
-    <div class="panel dense-panel">
-      <div class="section-heading compact"><div><p class="eyebrow">Module status</p><h2>${escapeHtml(label)}</h2></div></div>
-      <div class="metric-grid compact-metrics">
-        <div class="metric"><strong>Private</strong><span>Admin-only access</span></div>
-        <div class="metric"><strong>Noindex</strong><span>Search engines blocked</span></div>
-        <div class="metric"><strong>Secure</strong><span>Uses existing authentication</span></div>
+    <div class="metric-grid compact-metrics">
+      <div class="metric"><strong>${data.pagination.total}</strong><span>${escapeHtml(module.label)} Records</span></div>
+      <div class="metric"><strong>${money(dashboard.revenue, 'INR')}</strong><span>Revenue</span></div>
+      <div class="metric"><strong>${money(dashboard.expenses, 'INR')}</strong><span>Expenses</span></div>
+      <div class="metric"><strong>${money(dashboard.outstanding, 'INR')}</strong><span>Outstanding</span></div>
+      <div class="metric"><strong>${money(dashboard.gst, 'INR')}</strong><span>GST</span></div>
+      <div class="metric"><strong>${money(dashboard.profit, 'INR')}</strong><span>Profit</span></div>
+    </div>
+    <div class="panel dense-panel" style="margin-top:8px">${erpFeatureChips(module)}</div>
+    <div class="dense-toolbar sticky-toolbar">
+      <form id="erp-search" class="dense-search"><input name="keyword" value="${escapeHtml(params.get('keyword') || '')}" placeholder="Search ${escapeHtml(module.label)}..."><button class="button button-gold">Search</button></form>
+      <div class="toolbar">
+        <select id="erp-status"><option value="">All statuses</option>${(data.filters.statuses || []).map((status) => option(status, params.get('status'), statusText(status))).join('')}</select>
+        <a class="button button-ghost" href="/api/contract-finder/admin/erp/${module.key}/export.csv">Export CSV</a>
+        <a class="button button-ghost" href="/api/contract-finder/admin/erp/${module.key}/export.xls">Export Excel</a>
       </div>
-      <p class="notice">This ERP route is reserved inside the Skyproz Business Portal and can be expanded without exposing it on the public website.</p>
+    </div>
+    <div class="admin-grid">
+      <div class="panel dense-panel">
+        <div class="section-heading compact"><div><p class="eyebrow">Records</p><h2>${escapeHtml(module.label)} List</h2></div><p>${sortLink('Newest', 'newest')} | ${sortLink('Title', 'title')} | ${sortLink('Amount', 'amount:desc')} | ${sortLink('Due', 'due')}</p></div>
+        <div class="dense-table-wrap"><table class="dense-table"><thead><tr><th>Record</th><th>Title</th><th>Status</th><th>Customer / Company</th><th>Total</th><th>Due</th><th>Actions</th></tr></thead><tbody>${erpRows(module, data.items) || '<tr><td colspan="7" class="empty-row">No records match this search.</td></tr>'}</tbody></table></div>
+        <div class="pagination sticky-pagination"><button class="button button-ghost" id="erp-prev" ${data.pagination.page <= 1 ? 'disabled' : ''}>Previous</button><span class="button button-ghost">Page ${data.pagination.page} of ${data.pagination.pages}</span><button class="button button-ghost" id="erp-next" ${data.pagination.page >= data.pagination.pages ? 'disabled' : ''}>Next</button></div>
+      </div>
+      ${erpForm(module, editRecord)}
     </div>
   </section>`;
+  const goPage = (pageNumber) => { const query = new URLSearchParams(location.search); query.set('page', pageNumber); location.href = `/admin/${module.key}?${query}`; };
+  document.querySelector('#erp-prev').onclick = () => goPage(data.pagination.page - 1);
+  document.querySelector('#erp-next').onclick = () => goPage(data.pagination.page + 1);
+  document.querySelector('#erp-status').onchange = (event) => { const query = new URLSearchParams(location.search); if (event.target.value) query.set('status', event.target.value); else query.delete('status'); query.set('page', '1'); location.href = `/admin/${module.key}?${query}`; };
+  document.querySelector('#erp-search').onsubmit = (event) => { event.preventDefault(); const query = new URLSearchParams(location.search); query.set('keyword', new FormData(event.currentTarget).get('keyword') || ''); query.set('page', '1'); location.href = `/admin/${module.key}?${query}`; };
+  document.querySelector('#erp-form').onsubmit = async (event) => {
+    event.preventDefault();
+    const payload = await erpPayloadWithUpload(event.currentTarget, module);
+    const path = editRecord ? `/admin/erp/${module.key}/${editRecord.id}` : `/admin/erp/${module.key}`;
+    const method = editRecord ? 'PATCH' : 'POST';
+    const result = await api(path, { method, body: JSON.stringify(payload) });
+    toast(`${result.record.record_number} saved`);
+    location.href = `/admin/${module.key}/${result.record.id}`;
+  };
+  document.querySelectorAll('[data-erp-delete]').forEach((button) => button.onclick = async () => {
+    if (!confirm('Delete this ERP record?')) return;
+    await api(`/admin/erp/${module.key}/${button.dataset.erpDelete}`, { method: 'DELETE' });
+    toast('Record deleted');
+    button.closest('tr').remove();
+  });
 }
 
 function renderLogin() {

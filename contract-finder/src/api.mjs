@@ -23,7 +23,23 @@ import {
   updatePrivateOpportunity,
   updatePrivateSource
 } from './private-opportunities.mjs';
-import { readJson, sendJson } from './utils.mjs';
+import {
+  createErpRecord,
+  deleteErpRecord,
+  erpDashboard,
+  erpPdf,
+  erpWordHtml,
+  exportErpCsv,
+  exportErpExcel,
+  getErpRecord,
+  getErpModule,
+  listErpModules,
+  listErpRecords,
+  printableErpHtml,
+  runErpAction,
+  updateErpRecord
+} from './erp.mjs';
+import { readJson, sendBody, sendJson } from './utils.mjs';
 
 function match(pathname, pattern) {
   const result = pathname.match(pattern);
@@ -234,6 +250,72 @@ export async function handleApi(request, response, url) {
 
     if (pathname.startsWith('/api/contract-finder/admin/')) {
       const adminUser = requireAdmin(request);
+      if (request.method === 'GET' && pathname === '/api/contract-finder/admin/erp/modules') {
+        sendJson(response, 200, { items: listErpModules() }); return true;
+      }
+      if (request.method === 'GET' && pathname === '/api/contract-finder/admin/erp/dashboard') {
+        sendJson(response, 200, erpDashboard()); return true;
+      }
+      route = match(pathname, /^\/api\/contract-finder\/admin\/erp\/([^/]+)\/export\.(csv|xls)$/);
+      if (request.method === 'GET' && route) {
+        const module = getErpModule(route[0]);
+        const filename = `skyproz-${module.key}.${route[1]}`;
+        const body = route[1] === 'csv' ? exportErpCsv(module.key, queryObject(searchParams)) : exportErpExcel(module.key, queryObject(searchParams));
+        auditLog(adminUser, request, `erp.${module.key}.export`, 'erp_records', null, { format: route[1] });
+        sendBody(response, 200, body, {
+          'content-type': route[1] === 'csv' ? 'text/csv; charset=utf-8' : 'application/vnd.ms-excel; charset=utf-8',
+          'content-disposition': `attachment; filename="${filename}"`
+        }, request); return true;
+      }
+      route = match(pathname, /^\/api\/contract-finder\/admin\/erp\/([^/]+)\/(\d+)\/(print|pdf|word)$/);
+      if (request.method === 'GET' && route) {
+        const module = getErpModule(route[0]);
+        const id = Number(route[1]);
+        const format = route[2];
+        auditLog(adminUser, request, `erp.${module.key}.${format}`, 'erp_records', id, {});
+        if (format === 'pdf') {
+          sendBody(response, 200, erpPdf(module.key, id), {
+            'content-type': 'application/pdf',
+            'content-disposition': `attachment; filename="${module.key}-${id}.pdf"`
+          }, request); return true;
+        }
+        if (format === 'word') {
+          sendBody(response, 200, erpWordHtml(module.key, id), {
+            'content-type': 'application/msword; charset=utf-8',
+            'content-disposition': `attachment; filename="${module.key}-${id}.doc"`
+          }, request); return true;
+        }
+        sendBody(response, 200, printableErpHtml(module.key, id), { 'content-type': 'text/html; charset=utf-8' }, request); return true;
+      }
+      route = match(pathname, /^\/api\/contract-finder\/admin\/erp\/([^/]+)\/(\d+)\/actions\/([^/]+)$/);
+      if (request.method === 'POST' && route) {
+        const result = runErpAction(route[0], Number(route[1]), route[2], adminUser);
+        auditLog(adminUser, request, `erp.${route[0]}.${route[2]}`, 'erp_records', route[1], result);
+        sendJson(response, 200, result); return true;
+      }
+      route = match(pathname, /^\/api\/contract-finder\/admin\/erp\/([^/]+)\/(\d+)$/);
+      if (route && request.method === 'GET') {
+        sendJson(response, 200, { record: getErpRecord(route[0], Number(route[1])) }); return true;
+      }
+      if (route && request.method === 'PATCH') {
+        const record = updateErpRecord(route[0], Number(route[1]), await readJson(request, 1_500_000), adminUser);
+        auditLog(adminUser, request, `erp.${route[0]}.update`, 'erp_records', record.id, {});
+        sendJson(response, 200, { record }); return true;
+      }
+      if (route && request.method === 'DELETE') {
+        const result = deleteErpRecord(route[0], Number(route[1]), adminUser);
+        auditLog(adminUser, request, `erp.${route[0]}.delete`, 'erp_records', route[1], {});
+        sendJson(response, 200, result); return true;
+      }
+      route = match(pathname, /^\/api\/contract-finder\/admin\/erp\/([^/]+)$/);
+      if (request.method === 'GET' && route) {
+        sendJson(response, 200, listErpRecords(route[0], queryObject(searchParams))); return true;
+      }
+      if (request.method === 'POST' && route) {
+        const record = createErpRecord(route[0], await readJson(request, 1_500_000), adminUser);
+        auditLog(adminUser, request, `erp.${route[0]}.create`, 'erp_records', record.id, {});
+        sendJson(response, 201, { record }); return true;
+      }
       if (request.method === 'GET' && pathname === '/api/contract-finder/admin/private-opportunities') {
         sendJson(response, 200, {
           dashboard: privateOpportunityDashboard(),

@@ -52,12 +52,23 @@ const {
   uploadWorkerDocument,
   workerDashboard
 } = await import('../src/workers.mjs');
+const {
+  createErpRecord,
+  erpDashboard,
+  erpPdf,
+  exportErpCsv,
+  getErpRecord,
+  listErpModules,
+  listErpRecords,
+  runErpAction,
+  updateErpRecord
+} = await import('../src/erp.mjs');
 
 migrate();
 
 test('migration creates required contract module tables', () => {
   const names = new Set(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map((row) => row.name));
-  for (const table of ['contracts','contract_sources','saved_searches','user_alerts','user_favorites','contract_categories','watchlists','source_discovery_results','duplicate_merge_runs','workers','worker_documents','worker_jobs','worker_saved_jobs','worker_applications','private_opportunities','private_opportunity_sources','private_opportunity_source_logs']) assert.ok(names.has(table), `${table} should exist`);
+  for (const table of ['contracts','contract_sources','saved_searches','user_alerts','user_favorites','contract_categories','watchlists','source_discovery_results','duplicate_merge_runs','workers','worker_documents','worker_jobs','worker_saved_jobs','worker_applications','private_opportunities','private_opportunity_sources','private_opportunity_source_logs','erp_records','erp_line_items','erp_documents','erp_activity','erp_settings','erp_counters']) assert.ok(names.has(table), `${table} should exist`);
 });
 
 test('password hashes verify without storing plaintext', async () => {
@@ -278,6 +289,45 @@ test('admin pages are noindexed and do not emit public SEO metadata', () => {
   assert.equal(html.includes('property="og:title"'), false);
   assert.equal(html.includes('application/ld+json'), false);
   assert.match(html, /href="\/admin\/dashboard"/);
+});
+
+test('ERP modules support database CRUD, GST calculations, exports and conversions', () => {
+  const modules = listErpModules();
+  for (const key of ['crm','customers','companies','quotations','proforma-invoices','invoices','payment-receipts','work-orders','job-cards','amc','purchase-orders','vendors','inventory','expenses','financial-dashboard','reports','documents','company-profile','users','roles-permissions','audit-logs','email-templates','whatsapp-templates','settings']) {
+    assert.ok(modules.find((module) => module.key === key), `${key} module should be registered`);
+  }
+  const quotation = createErpRecord('quotations', {
+    title: 'Rope access facade maintenance quote',
+    status: 'sent',
+    customer_name: 'Metro Mall Facilities',
+    company_name: 'Metro Mall Pvt Ltd',
+    issue_date: '2026-07-07',
+    due_date: '2026-08-07',
+    gst_type: 'cgst_sgst',
+    line_items: [
+      { description: 'High-rise glass cleaning', hsn_sac: '998533', quantity: 2, unit_price: 50000, gst_rate: 18 },
+      { description: 'Facade inspection report', hsn_sac: '998346', quantity: 1, unit_price: 25000, gst_rate: 18 }
+    ]
+  }, { id: 1 });
+  assert.match(quotation.record_number, /^SKY-QTN-/);
+  assert.equal(quotation.amount, 125000);
+  assert.equal(quotation.tax_amount, 22500);
+  assert.equal(quotation.total_amount, 147500);
+  assert.equal(quotation.line_items.length, 2);
+  const updated = updateErpRecord('quotations', quotation.id, { status: 'accepted', notes: 'Customer approved by email.' }, { id: 1 });
+  assert.equal(updated.status, 'accepted');
+  const list = listErpRecords('quotations', { keyword: 'facade', page_size: 10 });
+  assert.ok(list.pagination.total >= 1);
+  const invoiceAction = runErpAction('quotations', quotation.id, 'convert-to-invoice', { id: 1 });
+  assert.equal(invoiceAction.created.module_key, 'invoices');
+  const workOrderAction = runErpAction('quotations', quotation.id, 'convert-to-work-order', { id: 1 });
+  assert.equal(workOrderAction.created.module_key, 'work-orders');
+  assert.match(exportErpCsv('quotations'), /Rope access facade maintenance quote/);
+  assert.ok(erpPdf('quotations', quotation.id).length > 100);
+  const detail = getErpRecord('quotations', quotation.id);
+  assert.ok(detail.activity.length >= 1);
+  const dashboard = erpDashboard();
+  assert.ok(dashboard.total_records >= 3);
 });
 
 test('worker portal supports registration, jobs, applications and documents', async () => {

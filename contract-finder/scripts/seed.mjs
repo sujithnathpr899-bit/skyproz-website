@@ -2,6 +2,7 @@
 import { hashPassword } from '../src/auth.mjs';
 import { createContract } from '../src/contracts.mjs';
 import { createWorkerJob } from '../src/workers.mjs';
+import { ensureErpSeedData } from '../src/erp.mjs';
 
 migrate();
 
@@ -191,6 +192,8 @@ for (const [email, name, role, plan, password] of users) {
       .run(email, await hashPassword(password), name, role, plan);
   }
 }
+
+ensureErpSeedData(db.prepare("SELECT id FROM users WHERE email = 'admin@skyproz.in'").get());
 
 if (!db.prepare('SELECT id FROM contracts LIMIT 1').get()) {
   const source = db.prepare("SELECT id FROM contract_sources WHERE name = 'Central Public Procurement Portal'").get();

@@ -61,11 +61,14 @@ const erpModules = new Set([
   'customers',
   'companies',
   'quotations',
+  'proforma-invoices',
+  'gst-invoices',
   'invoices',
   'payment-receipts',
   'work-orders',
   'job-cards',
   'amc',
+  'amc-management',
   'purchase-orders',
   'vendors',
   'inventory',
@@ -74,7 +77,12 @@ const erpModules = new Set([
   'reports',
   'documents',
   'company-profile',
+  'users',
   'user-management',
+  'roles-permissions',
+  'audit-logs',
+  'email-templates',
+  'whatsapp-templates',
   'settings'
 ]);
 
@@ -175,6 +183,11 @@ export const server = createServer(async (request, response) => {
     if (erpPage && erpModules.has(erpPage[1])) {
       requireAdmin(request);
       return sendHtml(response, 200, renderShell({ page: 'erpModule', identifier: erpPage[1] }), adminHeaders, request);
+    }
+    const erpDetailPage = url.pathname.match(/^\/admin\/([^/]+)\/([^/]+)$/);
+    if (erpDetailPage && erpModules.has(erpDetailPage[1])) {
+      requireAdmin(request);
+      return sendHtml(response, 200, renderShell({ page: 'erpModule', identifier: `${erpDetailPage[1]}/${erpDetailPage[2]}` }), adminHeaders, request);
     }
     const adminContractDetail = url.pathname.match(/^\/admin\/contracts\/([^/]+)$/);
     if (adminContractDetail) {
