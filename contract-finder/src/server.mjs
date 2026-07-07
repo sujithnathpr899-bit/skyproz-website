@@ -3,7 +3,7 @@ import path from 'node:path';
 import { createServer } from 'node:http';
 import { config, rootDir, validateProductionConfig } from './config.mjs';
 import { db, migrate } from './db.mjs';
-import { requireAdmin } from './auth.mjs';
+import { currentUser, requireAdmin } from './auth.mjs';
 import { getContract } from './contracts.mjs';
 import { handleApi } from './api.mjs';
 import { handleWorkerApi } from './worker-api.mjs';
@@ -32,6 +32,65 @@ const companyMimeTypes = new Map([
   ['.webmanifest', 'application/manifest+json; charset=utf-8'],
   ['.txt', 'text/plain; charset=utf-8']
 ]);
+
+const adminHeaders = { 'cache-control': 'no-store', 'x-robots-tag': 'noindex, nofollow' };
+
+const adminPages = new Map([
+  ['/admin', { page: 'admin' }],
+  ['/admin/', { page: 'admin' }],
+  ['/admin/dashboard', { page: 'admin' }],
+  ['/admin/contracts', { page: 'contracts' }],
+  ['/admin/contracts/', { page: 'contracts' }],
+  ['/admin/government-contracts', { page: 'admin' }],
+  ['/admin/private-opportunities', { page: 'privateOpportunities' }],
+  ['/admin/private-opportunities/', { page: 'privateOpportunities' }],
+  ['/admin/lead-finder', { page: 'privateOpportunities' }],
+  ['/admin/lead-finder/', { page: 'privateOpportunities' }],
+  ['/admin/connectors', { page: 'connectors' }],
+  ['/admin/connectors/', { page: 'connectors' }],
+  ['/admin/connector-wizard', { page: 'connectorWizard' }],
+  ['/admin/connector-wizard/', { page: 'connectorWizard' }],
+  ['/admin/source-discovery', { page: 'sourceDiscovery' }],
+  ['/admin/source-discovery/', { page: 'sourceDiscovery' }],
+  ['/admin/marketplace', { page: 'marketplace' }],
+  ['/admin/marketplace/', { page: 'marketplace' }]
+]);
+
+const erpModules = new Set([
+  'crm',
+  'customers',
+  'companies',
+  'quotations',
+  'invoices',
+  'payment-receipts',
+  'work-orders',
+  'job-cards',
+  'amc',
+  'purchase-orders',
+  'vendors',
+  'inventory',
+  'expenses',
+  'financial-dashboard',
+  'reports',
+  'documents',
+  'company-profile',
+  'user-management',
+  'settings'
+]);
+
+function isAdminPath(pathname) {
+  return pathname === '/admin' || pathname.startsWith('/admin/') || pathname.startsWith('/contract-finder/admin') || pathname === '/workers/admin';
+}
+
+function logPermissionDenied(request, pathname, status) {
+  try {
+    const user = currentUser(request);
+    db.prepare(`INSERT INTO audit_logs(user_id, action, entity_type, entity_id, metadata_json, ip_address)
+      VALUES (?, ?, ?, ?, ?, ?)`).run(user?.id || null, 'permission.denied', 'route', pathname, JSON.stringify({ status, method: request.method }), request.socket?.remoteAddress || null);
+  } catch {
+    // Permission logging should never mask the original authentication response.
+  }
+}
 
 function serveAsset(request, response, pathname) {
   const asset = assets.get(pathname);
@@ -100,17 +159,40 @@ export const server = createServer(async (request, response) => {
       ['/workers/settings', 'settings'], ['/workers/admin', 'admin']
     ]);
     const workerPage = workerPages.get(url.pathname);
-    if (workerPage) return sendHtml(response, 200, renderWorkerShell({ page: workerPage }), {}, request);
+    if (workerPage) {
+      if (workerPage === 'admin') {
+        requireAdmin(request);
+        return sendHtml(response, 200, renderWorkerShell({ page: workerPage }), adminHeaders, request);
+      }
+      return sendHtml(response, 200, renderWorkerShell({ page: workerPage }), {}, request);
+    }
+    const adminPage = adminPages.get(url.pathname);
+    if (adminPage) {
+      requireAdmin(request);
+      return sendHtml(response, 200, renderShell(adminPage), adminHeaders, request);
+    }
+    const erpPage = url.pathname.match(/^\/admin\/([^/]+)\/?$/);
+    if (erpPage && erpModules.has(erpPage[1])) {
+      requireAdmin(request);
+      return sendHtml(response, 200, renderShell({ page: 'erpModule', identifier: erpPage[1] }), adminHeaders, request);
+    }
+    const adminContractDetail = url.pathname.match(/^\/admin\/contracts\/([^/]+)$/);
+    if (adminContractDetail) {
+      requireAdmin(request);
+      const contract = getContract(decodeURIComponent(adminContractDetail[1]));
+      if (!contract) return sendHtml(response, 404, renderShell({ page: 'not-found' }), adminHeaders, request);
+      return sendHtml(response, 200, renderShell({ page: 'contract', identifier: adminContractDetail[1], contract, privateView: true }), adminHeaders, request);
+    }
     const detail = url.pathname.match(/^\/contract-finder\/contracts\/([^/]+)$/);
     if (detail) {
       const contract = getContract(decodeURIComponent(detail[1]));
       if (!contract) return sendHtml(response, 404, renderShell({ page: 'not-found' }), {}, request);
       return sendHtml(response, 200, renderShell({ page: 'contract', identifier: detail[1], contract }), { 'cache-control': 'public, max-age=60' }, request);
     }
-    const privateOpportunityDetail = url.pathname.match(/^\/contract-finder\/admin\/(?:private-opportunities|lead-finder)\/([^/]+)$/);
+    const privateOpportunityDetail = url.pathname.match(/^\/(?:contract-finder\/admin|admin)\/(?:private-opportunities|lead-finder)\/([^/]+)$/);
     if (privateOpportunityDetail) {
       requireAdmin(request);
-      return sendHtml(response, 200, renderShell({ page: 'privateOpportunity', identifier: decodeURIComponent(privateOpportunityDetail[1]) }), { 'cache-control': 'no-store' }, request);
+      return sendHtml(response, 200, renderShell({ page: 'privateOpportunity', identifier: decodeURIComponent(privateOpportunityDetail[1]) }), adminHeaders, request);
     }
     const pages = new Map([
       ['/contract-finder/', 'home'], ['/contract-finder', 'home'], ['/contract-finder/search', 'search'],
@@ -134,14 +216,15 @@ export const server = createServer(async (request, response) => {
     ]);
     const page = pages.get(url.pathname);
     if (page) {
-      if (page === 'privateOpportunities') requireAdmin(request);
-      return sendHtml(response, 200, renderShell({ page }), page === 'privateOpportunities' ? { 'cache-control': 'no-store' } : {}, request);
+      if (isAdminPath(url.pathname)) requireAdmin(request);
+      return sendHtml(response, 200, renderShell({ page }), isAdminPath(url.pathname) ? adminHeaders : {}, request);
     }
     return sendHtml(response, 404, renderShell({ page: 'not-found' }), {}, request);
   } catch (error) {
     console.error(error);
     if (error.status === 401 || error.status === 403) {
-      sendHtml(response, error.status, `<h1>${error.status === 401 ? 'Authentication Required' : 'Administrator Access Required'}</h1><p>${escapeHtml(error.message)}</p>`, { 'cache-control': 'no-store' }, request); return;
+      if (isAdminPath(url.pathname)) logPermissionDenied(request, url.pathname, error.status);
+      sendHtml(response, error.status, `<h1>${error.status === 401 ? 'Authentication Required' : 'Administrator Access Required'}</h1><p>${escapeHtml(error.message)}</p>`, isAdminPath(url.pathname) ? adminHeaders : { 'cache-control': 'no-store' }, request); return;
     }
     sendHtml(response, 500, '<h1>Contract Finder error</h1><p>Please try again.</p>', {}, request);
   }

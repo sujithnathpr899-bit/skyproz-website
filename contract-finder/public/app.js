@@ -69,14 +69,14 @@ function columnSelector(columns, key = 'contracts') {
   return `<details class="column-menu"><summary class="button button-ghost">Columns</summary><div class="column-menu-panel">${columns.filter(([id]) => id !== 'select' && id !== 'actions').map(([id, label]) => `<label><input type="checkbox" data-column-toggle="${escapeHtml(id)}" data-table-key="${escapeHtml(key)}" checked> ${escapeHtml(label)}</label>`).join('')}</div></details>`;
 }
 
-function contractTableRows(items = []) {
+function contractTableRows(items = [], basePath = '/contract-finder/contracts') {
   return items.map((contract) => {
     const score = Number(contract.opportunity_score || contract.ai_score || 0);
     const sourceLabel = contract.configured_source_name || contract.source_name || 'Source';
     return `<tr tabindex="0" data-contract-id="${contract.id}" data-contract-slug="${escapeHtml(contract.slug)}" data-contract-link="${contract.id}">
       <td class="select-col" data-col="select"><input type="checkbox" data-row-select value="${contract.id}" aria-label="Select ${escapeHtml(contract.title)}"></td>
       <td class="score-cell sticky-score" data-col="score" data-sort-value="${score}"><span class="score-pill">${score}</span></td>
-      <td class="title-cell" data-col="title" data-sort-value="${escapeHtml(contract.title)}"><a href="/contract-finder/contracts/${encodeURIComponent(contract.id)}">${escapeHtml(compactText(contract.title, 86))}</a><small>${escapeHtml(compactText(contract.buyer_name || contract.contract_type || '', 48))}</small></td>
+      <td class="title-cell" data-col="title" data-sort-value="${escapeHtml(contract.title)}"><a href="${basePath}/${encodeURIComponent(contract.id)}">${escapeHtml(compactText(contract.title, 86))}</a><small>${escapeHtml(compactText(contract.buyer_name || contract.contract_type || '', 48))}</small></td>
       <td data-col="country" data-sort-value="${escapeHtml(contract.country || '')}">${escapeHtml(compactText(contract.country || 'Worldwide', 24))}</td>
       <td data-col="industry" data-sort-value="${escapeHtml(contract.industry || '')}">${escapeHtml(compactText(contract.industry || 'General', 28))}</td>
       <td data-col="source" data-sort-value="${escapeHtml(sourceLabel)}">${escapeHtml(compactText(sourceLabel, 28))}</td>
@@ -84,16 +84,16 @@ function contractTableRows(items = []) {
       <td data-col="deadline" data-sort-value="${escapeHtml(contract.deadline || '')}">${shortDate(contract.deadline)}</td>
       <td data-col="status" data-sort-value="${escapeHtml(contract.status || '')}"><span class="status ${escapeHtml(contract.status)}">${escapeHtml(statusText(contract.status))}</span></td>
       <td data-col="posted" data-sort-value="${escapeHtml(contract.posted_date || '')}">${shortDate(contract.posted_date)}</td>
-      <td class="actions-cell" data-col="actions"><a class="button button-ghost" href="/contract-finder/contracts/${encodeURIComponent(contract.id)}">Open</a></td>
+      <td class="actions-cell" data-col="actions"><a class="button button-ghost" href="${basePath}/${encodeURIComponent(contract.id)}">Open</a></td>
     </tr>`;
   }).join('');
 }
 
-function contractDataTable(items = []) {
-  return `<div class="dense-table-wrap virtual-table" tabindex="0">
+function contractDataTable(items = [], basePath = '/contract-finder/contracts') {
+  return `<div class="dense-table-wrap virtual-table" tabindex="0" data-base-path="${escapeHtml(basePath)}">
     <table class="dense-table contract-table">
       <thead><tr>${contractColumns.map(([id, label]) => `<th data-col="${escapeHtml(id)}" class="${id === 'score' ? 'sticky-score' : ''}" ${id !== 'select' && id !== 'actions' ? `data-sort-column="${escapeHtml(id)}"` : ''}>${label}</th>`).join('')}</tr></thead>
-      <tbody>${contractTableRows(items) || '<tr><td colspan="11" class="empty-row">No contracts match these filters.</td></tr>'}</tbody>
+      <tbody>${contractTableRows(items, basePath) || '<tr><td colspan="11" class="empty-row">No contracts match these filters.</td></tr>'}</tbody>
     </table>
   </div>`;
 }
@@ -138,7 +138,8 @@ function bindDenseTableControls(root = document) {
   });
   root.querySelectorAll('.dense-table tbody tr[data-contract-link]').forEach((row) => {
     row.onkeydown = (event) => {
-      if (event.key === 'Enter') location.href = `/contract-finder/contracts/${encodeURIComponent(row.dataset.contractLink)}`;
+      const basePath = row.closest('.virtual-table')?.dataset.basePath || '/contract-finder/contracts';
+      if (event.key === 'Enter') location.href = `${basePath}/${encodeURIComponent(row.dataset.contractLink)}`;
       if (event.key === 'ArrowDown') { event.preventDefault(); row.nextElementSibling?.focus(); }
       if (event.key === 'ArrowUp') { event.preventDefault(); row.previousElementSibling?.focus(); }
     };
@@ -241,14 +242,56 @@ function bindServerSort(root, basePath) {
 function dashboardNav() {
   return `<nav class="dashboard-nav" aria-label="Contract Finder dashboard">
     ${button('Overview','/contract-finder/dashboard','button-ghost')}
-    ${currentUser?.role === 'admin' ? button('Government Contracts','/contract-finder/admin','button-ghost') + button('Lead Finder','/contract-finder/admin/lead-finder','button-ghost') : ''}
+    ${currentUser?.role === 'admin' ? button('Business Portal','/admin/dashboard','button-ghost') + button('Government Contracts','/admin/contracts','button-ghost') + button('Private Opportunities','/admin/private-opportunities','button-ghost') + button('Lead Finder','/admin/lead-finder','button-ghost') : ''}
     ${button('Contracts','/contract-finder/contracts','button-ghost')}
     ${button('Favorites','/contract-finder/favorites','button-ghost')}
     ${button('Saved Searches','/contract-finder/saved-searches','button-ghost')}
     ${button('Alerts','/contract-finder/alerts','button-ghost')}
     ${button('Watchlists','/contract-finder/watchlists','button-ghost')}
-    ${currentUser?.role === 'admin' ? button('Connectors','/contract-finder/admin/connectors','button-ghost') + button('Wizard','/contract-finder/admin/connector-wizard','button-ghost') + button('Discovery','/contract-finder/admin/source-discovery','button-ghost') + button('Marketplace','/contract-finder/admin/marketplace','button-ghost') : ''}
+    ${currentUser?.role === 'admin' ? button('Connectors','/admin/connectors','button-ghost') + button('Wizard','/admin/connector-wizard','button-ghost') + button('Discovery','/admin/source-discovery','button-ghost') + button('Marketplace','/admin/marketplace','button-ghost') + button('ERP','/admin/crm','button-ghost') : ''}
   </nav>`;
+}
+
+const erpModuleLabels = {
+  crm: 'CRM',
+  customers: 'Customers',
+  companies: 'Companies',
+  quotations: 'Quotations',
+  invoices: 'GST Invoices',
+  'payment-receipts': 'Payment Receipts',
+  'work-orders': 'Work Orders',
+  'job-cards': 'Job Cards',
+  amc: 'AMC Management',
+  'purchase-orders': 'Purchase Orders',
+  vendors: 'Vendors',
+  inventory: 'Inventory',
+  expenses: 'Expenses',
+  'financial-dashboard': 'Financial Dashboard',
+  reports: 'Reports',
+  documents: 'Documents',
+  'company-profile': 'Company Profile',
+  'user-management': 'User Management',
+  settings: 'Settings'
+};
+
+function adminPortalSidebar() {
+  const business = [
+    ['Government Contract Finder', '/admin/contracts'],
+    ['Private Opportunities (India)', '/admin/private-opportunities'],
+    ['Lead Finder', '/admin/lead-finder'],
+    ['Connector Manager', '/admin/connectors'],
+    ['Connector Wizard', '/admin/connector-wizard'],
+    ['Source Discovery', '/admin/source-discovery'],
+    ['Marketplace', '/admin/marketplace']
+  ];
+  const erp = Object.entries(erpModuleLabels).filter(([key]) => key !== 'settings').map(([key, label]) => [label, `/admin/${key}`]);
+  return `<div class="panel dense-panel">
+    <div class="section-heading compact"><div><p class="eyebrow">Private admin portal</p><h2>Business Portal</h2></div><p>Internal modules are hidden from the public website and require administrator access.</p></div>
+    <div class="dashboard-dense-grid">
+      <div><h3>Business Development</h3><nav class="dashboard-nav">${business.map(([label, href]) => button(label, href, 'button-ghost')).join('')}</nav></div>
+      <div><h3>ERP</h3><nav class="dashboard-nav">${erp.map(([label, href]) => button(label, href, 'button-ghost')).join('')}</nav></div>
+    </div>
+  </div>`;
 }
 
 function contractCard(contract) {
@@ -410,7 +453,7 @@ async function renderSearch() {
 async function renderContracts() {
   const params = new URLSearchParams(location.search);
   if (!params.get('page_size')) params.set('page_size','100');
-  const basePath = '/contract-finder/contracts';
+  const basePath = location.pathname.startsWith('/admin/contracts') ? '/admin/contracts' : '/contract-finder/contracts';
   const apiParams = new URLSearchParams(params);
   apiParams.set('view', 'contracts');
   const [results, options] = await Promise.all([api(`/contracts?${apiParams}`), api('/filter-options')]);
@@ -454,7 +497,7 @@ async function renderContracts() {
         <span class="chip">Server sorted: ${escapeHtml(params.get('sort') || 'newest')}</span>
       </div>
     </div>
-    ${contractDataTable(results.items)}
+    ${contractDataTable(results.items, basePath)}
     <div class="pagination sticky-pagination">
       <button class="button button-ghost" id="prev" ${results.pagination.page <= 1 ? 'disabled' : ''}>Previous</button>
       <span class="button button-ghost">Page ${results.pagination.page} of ${results.pagination.pages}</span>
@@ -696,7 +739,7 @@ function connectorCards(connectors = [], sources = []) {
       <div class="connector-actions">
         <button class="button button-ghost" ${source?.id ? `data-test-source="${source.id}"` : 'disabled'}>Test</button>
         <button class="button button-ghost" ${source?.id ? `data-import-source="${source.id}"` : 'disabled'}>Import</button>
-        <a class="button button-ghost" href="/contract-finder/admin/connector-wizard${source?.id ? `?connector=source:${source.id}` : ''}">Configure</a>
+        <a class="button button-ghost" href="/admin/connector-wizard${source?.id ? `?connector=source:${source.id}` : ''}">Configure</a>
       </div>
     </article>`;
   }).join('');
@@ -718,7 +761,7 @@ function sourceRows(sources = []) {
         <button class="button button-ghost" data-test-source="${source.id}">Test</button>
         <button class="button button-ghost" data-import-source="${source.id}">Import</button>
         <button class="button button-ghost" data-log-source="${source.id}">Logs</button>
-        <a class="button button-ghost" href="/contract-finder/admin/connector-wizard?connector=source:${source.id}">Config</a>
+        <a class="button button-ghost" href="/admin/connector-wizard?connector=source:${source.id}">Config</a>
         <button class="button ${source.is_active ? 'button-danger' : 'button-outline'}" data-toggle-source="${source.id}" data-active="${source.is_active ? '1' : '0'}">${source.is_active ? 'Disable' : 'Enable'}</button>
       </div>
     </td>
@@ -772,7 +815,7 @@ async function renderConnectorManager() {
   if (!(await requireLogin())) return; if(currentUser.role!=='admin'){app.innerHTML='<section class="page"><div class="empty">Administrator access required.</div></section>';return;}
   const data = await api('/admin/connectors');
   app.innerHTML = `<section class="page">
-    <div class="section-heading"><div><p class="eyebrow">Procurement automation</p><h1>Auto Connector Manager</h1></div><div class="toolbar"><a class="button button-outline" href="/contract-finder/admin">Back to Admin</a><button class="button button-gold" id="refresh-connectors">Refresh</button></div></div>
+    <div class="section-heading"><div><p class="eyebrow">Procurement automation</p><h1>Auto Connector Manager</h1></div><div class="toolbar"><a class="button button-outline" href="/admin/dashboard">Back to Admin</a><button class="button button-gold" id="refresh-connectors">Refresh</button></div></div>
     ${dashboardNav()}
     <div class="metric-grid">${connectorManagerWidgets(data.summary)}</div>
     <div class="admin-grid">
@@ -917,7 +960,7 @@ async function renderSourceDiscovery() {
   if (!(await requireLogin())) return; if(currentUser.role!=='admin'){app.innerHTML='<section class="page"><div class="empty">Administrator access required.</div></section>';return;}
   const data = await api('/admin/source-discovery');
   app.innerHTML = `<section class="page">
-    <div class="section-heading"><div><p class="eyebrow">Self-configuring intelligence</p><h1>Auto Source Discovery</h1></div><div class="toolbar"><button class="button button-gold" id="run-discovery">Discover Sources</button><a class="button button-outline" href="/contract-finder/admin/connectors">Connector Manager</a></div></div>
+    <div class="section-heading"><div><p class="eyebrow">Self-configuring intelligence</p><h1>Auto Source Discovery</h1></div><div class="toolbar"><button class="button button-gold" id="run-discovery">Discover Sources</button><a class="button button-outline" href="/admin/connectors">Connector Manager</a></div></div>
     ${dashboardNav()}
     <div class="metric-grid">${discoveryWidgets(data.summary, data.analytics)}</div>
     <form class="panel" id="discovery-save-form" style="margin-top:20px">
@@ -1042,7 +1085,7 @@ async function renderConnectorWizard() {
   const defaultMapping = JSON.stringify(Object.keys(selected?.field_mapping || {}).length ? selected.field_mapping : baseMapping, null, 2);
   const documentationUrl = selected?.documentation_url || '';
   app.innerHTML = `<section class="page">
-    <div class="section-heading"><div><p class="eyebrow">Admin guided setup</p><h1>Connector Wizard</h1></div><div class="toolbar"><a class="button button-outline" href="/contract-finder/admin/connectors">Connector Manager</a><a class="button button-outline" href="/contract-finder/admin/source-discovery">Source Discovery</a></div></div>
+    <div class="section-heading"><div><p class="eyebrow">Admin guided setup</p><h1>Connector Wizard</h1></div><div class="toolbar"><a class="button button-outline" href="/admin/connectors">Connector Manager</a><a class="button button-outline" href="/admin/source-discovery">Source Discovery</a></div></div>
     ${dashboardNav()}
     <div class="metric-grid">
       <div class="metric"><strong>${data.summary?.total || data.sources?.length || 0}</strong><span>Total connectors</span></div>
@@ -1098,7 +1141,7 @@ async function renderConnectorWizard() {
       </div>
     </div>
   </section>`;
-  document.querySelector('#wizard-connector').onchange=(event)=>{location.href=`/contract-finder/admin/connector-wizard?connector=${encodeURIComponent(event.target.value)}`;};
+  document.querySelector('#wizard-connector').onchange=(event)=>{location.href=`/admin/connector-wizard?connector=${encodeURIComponent(event.target.value)}`;};
   document.querySelector('#wizard-detect').onclick=async()=>{
     try {
       const body = selected?.type === 'source' ? { source_id: Number(selected.id) } : { template_id: selected?.id };
@@ -1129,7 +1172,7 @@ async function renderMarketplace() {
   if (!(await requireLogin())) return; if(currentUser.role!=='admin'){app.innerHTML='<section class="page"><div class="empty">Administrator access required.</div></section>';return;}
   const data = await api('/admin/marketplace');
   app.innerHTML = `<section class="page">
-    <div class="section-heading"><div><p class="eyebrow">Connector marketplace</p><h1>Global Procurement Coverage</h1></div><div class="toolbar"><a class="button button-outline" href="/contract-finder/admin/source-discovery">Source Discovery</a><a class="button button-outline" href="/contract-finder/admin/connectors">Connector Manager</a></div></div>
+    <div class="section-heading"><div><p class="eyebrow">Connector marketplace</p><h1>Global Procurement Coverage</h1></div><div class="toolbar"><a class="button button-outline" href="/admin/source-discovery">Source Discovery</a><a class="button button-outline" href="/admin/connectors">Connector Manager</a></div></div>
     ${dashboardNav()}
     <div class="metric-grid">${discoveryWidgets(data.summary, data.analytics)}</div>
     <div class="panel" style="margin-top:20px">
@@ -1214,6 +1257,8 @@ function privateMetricGrid(dashboard = {}) {
 }
 
 function leadFinderBasePath() {
+  if (location.pathname.startsWith('/admin/private-opportunities')) return '/admin/private-opportunities';
+  if (location.pathname.startsWith('/admin/lead-finder')) return '/admin/lead-finder';
   return location.pathname.startsWith('/contract-finder/admin/private-opportunities')
     ? '/contract-finder/admin/private-opportunities'
     : '/contract-finder/admin/lead-finder';
@@ -1313,7 +1358,7 @@ async function renderPrivateOpportunities() {
     </div>
     <div class="dense-toolbar sticky-toolbar">
       <form id="private-quick-search" class="dense-search"><input name="keyword" value="${escapeHtml(params.get('keyword') || '')}" placeholder="Search private opportunities..."><button class="button button-gold">Search</button></form>
-      <div class="toolbar"><span class="chip">${opportunities.pagination.total} private opportunities</span><a class="button button-outline" href="/contract-finder/admin">Government Contracts</a>${columnSelector(privateOpportunityColumns, 'private-opportunities')}</div>
+      <div class="toolbar"><span class="chip">${opportunities.pagination.total} private opportunities</span><a class="button button-outline" href="/admin/contracts">Government Contracts</a>${columnSelector(privateOpportunityColumns, 'private-opportunities')}</div>
       <div class="chip-row quick-filters">${['Rope Access','Glass Cleaning','Building Maintenance','AMC','Facility Management'].map((service) => { const query = new URLSearchParams(params); query.set('service', service); query.set('page','1'); return `<a class="chip ${params.get('service') === service ? 'chip-gold' : ''}" href="${basePath}?${query}">${escapeHtml(service)}</a>`; }).join('')}</div>
     </div>
     <details class="filter-drawer"><summary class="button button-outline">Advanced filters</summary>${privateFilterForm(data.filters, params)}</details>
@@ -1469,6 +1514,7 @@ async function renderAdmin() {
   app.innerHTML=`<section class="page">
     <div class="section-heading"><div><p class="eyebrow">Operations control</p><h1>Admin Panel</h1></div><div class="toolbar"><button class="button button-outline" id="snapshot">Save analytics</button><button class="button button-danger" id="dedupe">Remove duplicates</button></div></div>
     ${dashboardNav()}
+    ${adminPortalSidebar()}
     <div class="dense-toolbar sticky-toolbar">
       <div class="toolbar"><button class="button button-gold" id="run-bot">Run AI Bot Now</button>${['hourly','daily','weekly','monthly'].map((job)=>`<button class="button button-ghost" data-run-job="${job}">Run ${job}</button>`).join('')}</div>
     </div>
@@ -1548,10 +1594,36 @@ async function renderAdmin() {
   document.querySelectorAll('[data-test-source]').forEach((el)=>el.onclick=async()=>{try{const result=await api(`/admin/sources/${el.dataset.testSource}/test`,{method:'POST',body:'{}'});toast(result.ok ? 'Connection test passed' : `Test failed: ${result.error || result.message || result.status}`);}catch(error){toast(error.message,true);}});
   document.querySelectorAll('[data-import-source]').forEach((el)=>el.onclick=async()=>{try{const result=await api(`/admin/sources/${el.dataset.importSource}/import`,{method:'POST',body:'{}'});toast(`Import done: ${result.imported} new, ${result.updated} updated`);setTimeout(()=>location.reload(),500);}catch(error){toast(error.message,true);}});
   document.querySelectorAll('[data-toggle-source]').forEach((el)=>el.onclick=async()=>{const active=el.dataset.active !== '1';await api(`/admin/sources/${el.dataset.toggleSource}`,{method:'PATCH',body:JSON.stringify({is_active:active})});toast(active?'Source enabled':'Source disabled');setTimeout(()=>location.reload(),350);});
-  document.querySelectorAll('[data-log-source]').forEach((el)=>el.onclick=()=>{location.href='/contract-finder/admin/connectors';});
+  document.querySelectorAll('[data-log-source]').forEach((el)=>el.onclick=()=>{location.href='/admin/connectors';});
   document.querySelector('#keyword-form').onsubmit=async(event)=>{event.preventDefault();const values=Object.fromEntries(new FormData(event.currentTarget));values.weight=Number(values.weight || 8);await api('/admin/bot/keywords',{method:'POST',body:JSON.stringify(values)});toast('Keyword added');setTimeout(()=>location.reload(),350);};
   document.querySelector('#source-form').onsubmit=async(event)=>{event.preventDefault();const values=Object.fromEntries(new FormData(event.currentTarget));values.parser_type='json';values.initial_import_limit=Number(values.initial_import_limit || 500);values.daily_import_limit=Number(values.daily_import_limit || 50);await api('/admin/sources',{method:'POST',body:JSON.stringify(values)});toast('Source added');setTimeout(()=>location.reload(),350);};
   document.querySelector('#contract-form').onsubmit=async(event)=>{event.preventDefault();const values=Object.fromEntries(new FormData(event.currentTarget));values.buyer_type='government';values.work_mode='onsite';values.posted_date=new Date().toISOString();await api('/admin/contracts',{method:'POST',body:JSON.stringify(values)});toast('Contract added');event.currentTarget.reset();};
+}
+
+async function renderErpModule() {
+  if (!(await requireLogin())) return;
+  if (currentUser.role !== 'admin') {
+    app.innerHTML = '<section class="page"><div class="empty">Administrator access required.</div></section>';
+    return;
+  }
+  const label = erpModuleLabels[identifier] || 'Business Module';
+  app.innerHTML = `<section class="page">
+    <div class="section-heading">
+      <div><p class="eyebrow">ERP</p><h1>${escapeHtml(label)}</h1></div>
+      <p>Internal Skyproz business operations workspace. This page is private, noindex, and available only to administrators.</p>
+    </div>
+    ${dashboardNav()}
+    ${adminPortalSidebar()}
+    <div class="panel dense-panel">
+      <div class="section-heading compact"><div><p class="eyebrow">Module status</p><h2>${escapeHtml(label)}</h2></div></div>
+      <div class="metric-grid compact-metrics">
+        <div class="metric"><strong>Private</strong><span>Admin-only access</span></div>
+        <div class="metric"><strong>Noindex</strong><span>Search engines blocked</span></div>
+        <div class="metric"><strong>Secure</strong><span>Uses existing authentication</span></div>
+      </div>
+      <p class="notice">This ERP route is reserved inside the Skyproz Business Portal and can be expanded without exposing it on the public website.</p>
+    </div>
+  </section>`;
 }
 
 function renderLogin() {
@@ -1566,7 +1638,7 @@ async function init() {
   try { currentUser=(await api('/auth/me')).user; } catch { currentUser=null; }
   document.querySelector('#account-nav').innerHTML=currentUser?`<a class="account-link" href="/contract-finder/dashboard"><span class="account-dot"></span>${escapeHtml(currentUser.display_name)}</a>`:`<a class="button button-ghost" href="/contract-finder/login">Sign in</a>`;
   const menu=document.querySelector('.menu-toggle');menu.onclick=()=>{const nav=document.querySelector('.nav-links');const open=nav.classList.toggle('open');menu.setAttribute('aria-expanded',String(open));};
-  const routes={home:renderHome,search:renderSearch,contracts:renderContracts,contract:renderContract,dashboard:renderDashboard,favorites:renderFavorites,saved:renderSaved,alerts:renderAlerts,watchlists:renderWatchlists,admin:renderAdmin,privateOpportunities:renderPrivateOpportunities,privateOpportunity:renderPrivateOpportunityDetail,connectors:renderConnectorManager,sourceDiscovery:renderSourceDiscovery,connectorWizard:renderConnectorWizard,marketplace:renderMarketplace,login:renderLogin,'not-found':renderNotFound};
+  const routes={home:renderHome,search:renderSearch,contracts:renderContracts,contract:renderContract,dashboard:renderDashboard,favorites:renderFavorites,saved:renderSaved,alerts:renderAlerts,watchlists:renderWatchlists,admin:renderAdmin,privateOpportunities:renderPrivateOpportunities,privateOpportunity:renderPrivateOpportunityDetail,connectors:renderConnectorManager,sourceDiscovery:renderSourceDiscovery,connectorWizard:renderConnectorWizard,marketplace:renderMarketplace,erpModule:renderErpModule,login:renderLogin,'not-found':renderNotFound};
   try { await (routes[page]||renderNotFound)(); } catch(error){ console.error(error); app.innerHTML=`<section class="page"><div class="empty error"><h2>Unable to load this page</h2><p>${escapeHtml(error.message)}</p></div></section>`; }
 }
 

@@ -16,14 +16,15 @@ const pageMeta = {
   marketplace: ['Connector Marketplace | Skyproz', 'Review procurement connector coverage and install supported official sources.'],
   privateOpportunities: ['Lead Finder | Skyproz', 'Admin-only private building maintenance lead and opportunity management.'],
   privateOpportunity: ['Private Opportunity Detail | Skyproz', 'Admin-only private opportunity intelligence and source details.'],
+  erpModule: ['Business Portal | Skyproz', 'Admin-only ERP and business operations workspace.'],
   login: ['Sign In | Skyproz Contract Finder', 'Sign in to save contracts and create opportunity alerts.']
 };
 
-export function renderShell({ page = 'home', identifier = '', contract = null } = {}) {
+export function renderShell({ page = 'home', identifier = '', contract = null, privateView = false } = {}) {
   const [defaultTitle, defaultDescription] = pageMeta[page] || pageMeta.home;
   const title = contract ? `${contract.title} | Skyproz Contract Finder` : defaultTitle;
   const description = contract ? String(contract.description).slice(0, 155) : defaultDescription;
-  const privatePage = ['dashboard','favorites','saved','alerts','watchlists','admin','connectors','sourceDiscovery','connectorWizard','marketplace','privateOpportunities','privateOpportunity','login'].includes(page);
+  const privatePage = privateView || ['dashboard','favorites','saved','alerts','watchlists','admin','connectors','sourceDiscovery','connectorWizard','marketplace','privateOpportunities','privateOpportunity','erpModule','login'].includes(page);
   const canonical = contract ? `${config.appOrigin}/contract-finder/contracts/${contract.slug}` : `${config.appOrigin}/contract-finder/${page === 'home' ? '' : page}`;
   const structuredData = contract ? {
     '@context': 'https://schema.org', '@type': 'GovernmentService', name: contract.title,
@@ -35,30 +36,34 @@ export function renderShell({ page = 'home', identifier = '', contract = null } 
     applicationCategory: 'BusinessApplication', url: `${config.appOrigin}/contract-finder/`
   };
   const fallback = contract ? `<article class="seo-contract"><h1>${escapeHtml(contract.title)}</h1><p>${escapeHtml(contract.description)}</p><dl><dt>Country</dt><dd>${escapeHtml(contract.country)}</dd><dt>Industry</dt><dd>${escapeHtml(contract.industry)}</dd><dt>Deadline</dt><dd>${escapeHtml(contract.deadline || 'Not stated')}</dd></dl></article>` : '';
+  const publicSeo = privatePage ? '' : `
+  <meta property="og:title" content="${escapeHtml(title)}">
+  <meta property="og:description" content="${escapeHtml(description)}">
+  <meta property="og:type" content="website">
+  <link rel="canonical" href="${escapeHtml(canonical)}">
+  <script type="application/ld+json">${JSON.stringify(structuredData).replace(/</g, '\\u003c')}</script>`;
+  const navigation = privatePage && page !== 'login'
+    ? '<a href="/">Company Site</a><a href="/admin/dashboard">Admin Dashboard</a><a href="/admin/contracts">Government Contracts</a><a href="/admin/lead-finder">Lead Finder</a><a href="/admin/connectors">Connectors</a><a href="/admin/crm">ERP</a>'
+    : '<a href="/">Company Site</a><a href="/contract-finder/">Contract Finder</a><a href="/contract-finder/contracts">Contracts</a><a href="/contract-finder/search">Search</a><a href="/contract-finder/dashboard">Dashboard</a>';
   return `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="${escapeHtml(description)}">
-  <meta name="robots" content="${privatePage ? 'noindex, nofollow' : 'index, follow'}">
-  <meta property="og:title" content="${escapeHtml(title)}">
-  <meta property="og:description" content="${escapeHtml(description)}">
-  <meta property="og:type" content="website">
-  <link rel="canonical" href="${escapeHtml(canonical)}">
+  <meta name="robots" content="${privatePage ? 'noindex,nofollow,noarchive' : 'index, follow'}">${publicSeo}
   <title>${escapeHtml(title)}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/contract-finder/assets/styles.css">
-  <script type="application/ld+json">${JSON.stringify(structuredData).replace(/</g, '\\u003c')}</script>
 </head>
 <body>
   <header class="site-header">
     <a class="brand" href="/"><span class="brand-mark">S</span><span><strong>SKYPROZ</strong><small>SERVICES</small></span></a>
     <button class="menu-toggle" type="button" aria-expanded="false">Menu</button>
     <nav class="nav-links">
-      <a href="/">Company Site</a><a href="/contract-finder/">Contract Finder</a><a href="/contract-finder/contracts">Contracts</a><a href="/contract-finder/search">Search</a><a href="/contract-finder/dashboard">Dashboard</a>
+      ${navigation}
     </nav>
     <div id="account-nav"></div>
   </header>

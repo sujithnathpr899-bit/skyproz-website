@@ -13,6 +13,7 @@ const { migrate, db } = await import('../src/db.mjs');
 const { createContract, searchContracts, updateContract, removeDuplicateContracts } = await import('../src/contracts.mjs');
 const { createSession, hashPassword, sessionCookie, verifyPassword } = await import('../src/auth.mjs');
 const { handleApi } = await import('../src/api.mjs');
+const { renderShell } = await import('../src/views.mjs');
 const {
   createPrivateOpportunity,
   createPrivateSource,
@@ -262,6 +263,7 @@ test('private opportunities API is admin only', async () => {
     assert.equal(userResponse.status, 403);
     const adminResponse = await fetch(`${base}/api/contract-finder/admin/private-opportunities`, { headers: { cookie: adminCookie } });
     assert.equal(adminResponse.status, 200);
+    assert.equal(adminResponse.headers.get('x-robots-tag'), 'noindex, nofollow');
     const payload = await adminResponse.json();
     assert.ok(payload.dashboard);
     assert.ok(payload.opportunities);
@@ -270,6 +272,13 @@ test('private opportunities API is admin only', async () => {
   }
 });
 
+test('admin pages are noindexed and do not emit public SEO metadata', () => {
+  const html = renderShell({ page: 'admin' });
+  assert.match(html, /<meta name="robots" content="noindex,nofollow,noarchive">/);
+  assert.equal(html.includes('property="og:title"'), false);
+  assert.equal(html.includes('application/ld+json'), false);
+  assert.match(html, /href="\/admin\/dashboard"/);
+});
 
 test('worker portal supports registration, jobs, applications and documents', async () => {
   const worker = await createWorker({

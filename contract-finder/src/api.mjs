@@ -68,6 +68,8 @@ function verifyOwnership(table, id, userId) {
 export async function handleApi(request, response, url) {
   const { pathname, searchParams } = url;
   if (!pathname.startsWith('/api/contract-finder/')) return false;
+  const adminApiRequest = pathname.startsWith('/api/contract-finder/admin/');
+  if (adminApiRequest) response.setHeader('X-Robots-Tag', 'noindex, nofollow');
   try {
     rateLimit(request, pathname);
     if (request.method === 'GET' && pathname === '/api/contract-finder/health') {
@@ -100,12 +102,19 @@ export async function handleApi(request, response, url) {
     }
     if (request.method === 'POST' && pathname === '/api/contract-finder/auth/login') {
       const body = await readJson(request); requireFields(body, ['email', 'password']);
-      const user = db.prepare('SELECT * FROM users WHERE email = ? COLLATE NOCASE AND is_active = 1').get(String(body.email).trim());
-      if (!user || !(await verifyPassword(body.password, user.password_hash))) throw Object.assign(new Error('Invalid email or password'), { status: 401 });
+      const email = String(body.email).trim();
+      const user = db.prepare('SELECT * FROM users WHERE email = ? COLLATE NOCASE AND is_active = 1').get(email);
+      if (!user || !(await verifyPassword(body.password, user.password_hash))) {
+        auditLog(user, request, 'auth.login_failed', 'users', user?.id || null, { email });
+        throw Object.assign(new Error('Invalid email or password'), { status: 401 });
+      }
       const session = createSession(user.id);
+      auditLog(user, request, 'auth.login', 'users', user.id, {});
       sendJson(response, 200, { user: publicUser(user) }, { 'set-cookie': sessionCookie(session.value, session.expiresAt) }); return true;
     }
     if (request.method === 'POST' && pathname === '/api/contract-finder/auth/logout') {
+      const user = currentUser(request);
+      auditLog(user, request, 'auth.logout', 'users', user?.id || null, {});
       destroySession(request); sendJson(response, 200, { ok: true }, { 'set-cookie': clearSessionCookie() }); return true;
     }
 
@@ -550,6 +559,13 @@ export async function handleApi(request, response, url) {
 
     sendJson(response, 404, { error: 'API route not found' }); return true;
   } catch (error) {
+    if (adminApiRequest && (error.status === 401 || error.status === 403)) {
+      try {
+        auditLog(currentUser(request), request, 'permission.denied', 'api_route', pathname, { status: error.status, method: request.method });
+      } catch {
+        // Permission logging should never hide the original API response.
+      }
+    }
     if (!error.status || error.status >= 500) console.error(error);
     sendJson(response, error.status || 500, { error: error.message || 'Internal server error', code: error.code });
     return true;
