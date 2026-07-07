@@ -43,7 +43,7 @@ export function renderShell({ page = 'home', identifier = '', contract = null, p
   <link rel="canonical" href="${escapeHtml(canonical)}">
   <script type="application/ld+json">${JSON.stringify(structuredData).replace(/</g, '\\u003c')}</script>`;
   const navigation = privatePage && page !== 'login'
-    ? '<a href="/">Company Site</a><a href="/admin/dashboard">Admin Dashboard</a><a href="/admin/contracts">Government Contracts</a><a href="/admin/lead-finder">Lead Finder</a><a href="/admin/connectors">Connectors</a><a href="/admin/crm">ERP</a>'
+    ? '<a href="/">Company Site</a><a href="/admin/dashboard">Dashboard</a><a href="/admin/contracts">Business Development</a><a href="/admin/crm">ERP</a><a href="/admin/settings">Settings</a>'
     : '<a href="/">Company Site</a><a href="/contract-finder/">Contract Finder</a><a href="/contract-finder/contracts">Contracts</a><a href="/contract-finder/search">Search</a><a href="/contract-finder/dashboard">Dashboard</a>';
   return `<!doctype html>
 <html lang="en">

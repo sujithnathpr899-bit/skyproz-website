@@ -240,37 +240,35 @@ function bindServerSort(root, basePath) {
 }
 
 function dashboardNav() {
+  if (currentUser?.role === 'admin') {
+    return `<nav class="dashboard-nav" aria-label="Admin portal">
+      ${button('Dashboard','/admin/dashboard','button-ghost')}
+      ${button('Business Development','/admin/contracts','button-ghost')}
+      ${button('ERP','/admin/crm','button-ghost')}
+      ${button('Settings','/admin/settings','button-ghost')}
+    </nav>`;
+  }
   return `<nav class="dashboard-nav" aria-label="Contract Finder dashboard">
     ${button('Overview','/contract-finder/dashboard','button-ghost')}
-    ${currentUser?.role === 'admin' ? button('Business Portal','/admin/dashboard','button-ghost') + button('Government Contracts','/admin/contracts','button-ghost') + button('Private Opportunities','/admin/private-opportunities','button-ghost') + button('Lead Finder','/admin/lead-finder','button-ghost') : ''}
     ${button('Contracts','/contract-finder/contracts','button-ghost')}
     ${button('Favorites','/contract-finder/favorites','button-ghost')}
     ${button('Saved Searches','/contract-finder/saved-searches','button-ghost')}
     ${button('Alerts','/contract-finder/alerts','button-ghost')}
     ${button('Watchlists','/contract-finder/watchlists','button-ghost')}
-    ${currentUser?.role === 'admin' ? button('Connectors','/admin/connectors','button-ghost') + button('Wizard','/admin/connector-wizard','button-ghost') + button('Discovery','/admin/source-discovery','button-ghost') + button('Marketplace','/admin/marketplace','button-ghost') + button('ERP','/admin/crm','button-ghost') : ''}
   </nav>`;
 }
 
 const erpModuleLabels = {
   crm: 'CRM',
-  customers: 'Customers',
-  companies: 'Companies',
   quotations: 'Quotations',
   invoices: 'GST Invoices',
   'payment-receipts': 'Payment Receipts',
   'work-orders': 'Work Orders',
   'job-cards': 'Job Cards',
   amc: 'AMC Management',
-  'purchase-orders': 'Purchase Orders',
-  vendors: 'Vendors',
   inventory: 'Inventory',
   expenses: 'Expenses',
-  'financial-dashboard': 'Financial Dashboard',
   reports: 'Reports',
-  documents: 'Documents',
-  'company-profile': 'Company Profile',
-  'user-management': 'User Management',
   settings: 'Settings'
 };
 
@@ -281,15 +279,16 @@ function adminPortalSidebar() {
     ['Lead Finder', '/admin/lead-finder'],
     ['Connector Manager', '/admin/connectors'],
     ['Connector Wizard', '/admin/connector-wizard'],
-    ['Source Discovery', '/admin/source-discovery'],
-    ['Marketplace', '/admin/marketplace']
+    ['Source Discovery', '/admin/source-discovery']
   ];
   const erp = Object.entries(erpModuleLabels).filter(([key]) => key !== 'settings').map(([key, label]) => [label, `/admin/${key}`]);
   return `<div class="panel dense-panel">
-    <div class="section-heading compact"><div><p class="eyebrow">Private admin portal</p><h2>Business Portal</h2></div><p>Internal modules are hidden from the public website and require administrator access.</p></div>
+    <div class="section-heading compact"><div><p class="eyebrow">Private admin portal</p><h2>/admin</h2></div><p>Internal modules are hidden from the public website and require administrator access.</p></div>
     <div class="dashboard-dense-grid">
+      <div><h3>Dashboard</h3><nav class="dashboard-nav">${button('Dashboard', '/admin/dashboard', 'button-ghost')}</nav></div>
       <div><h3>Business Development</h3><nav class="dashboard-nav">${business.map(([label, href]) => button(label, href, 'button-ghost')).join('')}</nav></div>
       <div><h3>ERP</h3><nav class="dashboard-nav">${erp.map(([label, href]) => button(label, href, 'button-ghost')).join('')}</nav></div>
+      <div><h3>Settings</h3><nav class="dashboard-nav">${button('Settings', '/admin/settings', 'button-ghost')}</nav></div>
     </div>
   </div>`;
 }
